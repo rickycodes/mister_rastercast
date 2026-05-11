@@ -1,5 +1,7 @@
 # rastercast
 
+[![ShellCheck](https://github.com/rickycodes/mister_rastercast/actions/workflows/shellcheck.yml/badge.svg?branch=main)](https://github.com/rickycodes/mister_rastercast/actions/workflows/shellcheck.yml?query=branch%3Amain)
+
 What if [mister_plex](https://github.com/mrchrisster/mister_plex) without the plex?
 
 rastercast is a lightweight video streaming path for MiSTerFPGA CRT setups.
