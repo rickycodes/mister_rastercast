@@ -18,6 +18,13 @@ Environment:
 EOF
 }
 
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    printf 'error: required command not found: %s\n' "$1" >&2
+    exit 1
+  fi
+}
+
 if [[ ${1:-} == "" || ${1:-} == "-h" || ${1:-} == "--help" ]]; then
   usage
   exit 0
@@ -54,6 +61,7 @@ fi
 
 if [[ ! -f "${mrsampath}/mplayer" ]]; then
   if [[ -f "${mrsampath}/mplayer.zip" ]]; then
+    require_command unzip
     unzip -ojq "${mrsampath}/mplayer.zip" -d "${mrsampath}"
   elif declare -F get_samvideo >/dev/null 2>&1; then
     get_samvideo
