@@ -9,7 +9,8 @@ Environment:
   RASTERCAST_BIND_ADDR   HTTP bind address (default: 0.0.0.0)
   RASTERCAST_HOST_IP     Host/IP printed in the playback URL (auto-detected by default)
   RASTERCAST_PORT        HTTP port (default: 8090)
-  RASTERCAST_TRANSPORT   ts, hls, or hls-vod (default: ts)
+  RASTERCAST_FPS         Optional output video FPS override, e.g. 30000/1001
+  RASTERCAST_VIDEO_BITRATE  Output video bitrate (default: 1000k)
   RASTERCAST_STARTUP_TIMEOUT  Seconds to wait for stream startup (default: 30)
 EOF
 }
@@ -27,13 +28,9 @@ fi
 
 bind_addr=${RASTERCAST_BIND_ADDR:-0.0.0.0}
 port=${RASTERCAST_PORT:-8090}
-transport=${RASTERCAST_TRANSPORT:-ts}
+output_fps=${RASTERCAST_FPS:-}
+video_bitrate=${RASTERCAST_VIDEO_BITRATE:-1000k}
 startup_timeout=${RASTERCAST_STARTUP_TIMEOUT:-30}
-
-if [[ "$transport" != "hls-vod" && "$transport" != "hls" && "$transport" != "ts" ]]; then
-  printf 'error: RASTERCAST_TRANSPORT must be ts, hls, or hls-vod, got: %s\n' "$transport" >&2
-  exit 1
-fi
 
 host_ip=${RASTERCAST_HOST_IP:-}
 if [[ -z "$host_ip" ]]; then
@@ -84,34 +81,24 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-printf 'rastercast: exporting %s stream into %s\n' "$transport" "$workdir" >&2
+printf 'rastercast: exporting MPEG-TS stream into %s\n' "$workdir" >&2
 
 python3 - "$bind_addr" "$port" "$workdir" >"${server_log}" 2>&1 <<'PY' &
-import functools
 import http.server
 import os
 import socketserver
 import sys
 import time
-import threading
 from urllib.parse import unquote, urlparse
 
 bind_addr = sys.argv[1]
 port = int(sys.argv[2])
 workdir = sys.argv[3]
-playlist_state = {}
-playlist_lock = threading.Lock()
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
 
-class RastercastHandler(http.server.SimpleHTTPRequestHandler):
-    extensions_map = {
-        **http.server.SimpleHTTPRequestHandler.extensions_map,
-        ".m3u8": "application/vnd.apple.mpegurl",
-        ".ts": "video/mp2t",
-    }
-
+class RastercastHandler(http.server.BaseHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
         self.send_header("Pragma", "no-cache")
@@ -120,93 +107,12 @@ class RastercastHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = unquote(urlparse(self.path).path)
-        if path == "/stream.m3u8":
-            self.stream_playlist()
-            return
         if path == "/stream.ts":
-            self.stream_transport_stream()
+            self.stream_ts()
             return
-        super().do_GET()
+        self.send_error(404, "not found")
 
-    def stream_playlist(self):
-        playlist_path = os.path.join(workdir, "stream.m3u8")
-        error_path = os.path.join(workdir, "stream.error")
-        client_key = self.client_address[0]
-        deadline = time.monotonic() + 30
-
-        while True:
-            if os.path.exists(error_path):
-                self.send_error(500, "ffmpeg failed")
-                return
-            try:
-                with open(playlist_path, "rb") as playlist:
-                    body = playlist.read()
-            except FileNotFoundError:
-                body = b""
-
-            if body:
-                body = self.client_playlist(body, client_key)
-                break
-
-            if time.monotonic() >= deadline:
-                self.send_error(404, "playlist not ready")
-                return
-            time.sleep(0.1)
-
-        try:
-            self.send_response(200)
-            self.send_header("Content-Type", "application/vnd.apple.mpegurl")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError):
-            return
-
-    def client_playlist(self, source_body, client_key):
-        text = source_body.decode("utf-8", errors="replace")
-        if "#EXT-X-ENDLIST" in text:
-            return source_body
-
-        lines = text.splitlines()
-        prefix = []
-        segments = []
-        index = 0
-
-        while index < len(lines):
-            line = lines[index]
-            if line.startswith("#EXTINF:") and index + 1 < len(lines):
-                segments.append((line, lines[index + 1]))
-                index += 2
-                continue
-            if not line.startswith("#EXT-X-ENDLIST"):
-                prefix.append(line)
-            index += 1
-
-        if not segments:
-            return source_body
-
-        with playlist_lock:
-            previous_count = playlist_state.get(client_key, 0)
-            if previous_count <= 0:
-                reveal_count = 1
-            else:
-                reveal_count = min(len(segments), previous_count + 2)
-            playlist_state[client_key] = reveal_count
-
-        output = []
-        for line in prefix:
-            if line.startswith("#EXT-X-MEDIA-SEQUENCE:"):
-                output.append("#EXT-X-MEDIA-SEQUENCE:0")
-            else:
-                output.append(line)
-        for extinf, url in segments[:reveal_count]:
-            output.append(extinf)
-            output.append(url)
-        output.append("")
-        return "\n".join(output).encode("utf-8")
-
-    def stream_transport_stream(self):
+    def stream_ts(self):
         stream_path = os.path.join(workdir, "stream.ts")
         done_path = os.path.join(workdir, "stream.done")
         error_path = os.path.join(workdir, "stream.error")
@@ -242,8 +148,7 @@ class RastercastHandler(http.server.SimpleHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             return
 
-handler = functools.partial(RastercastHandler, directory=workdir)
-server = ThreadingHTTPServer((bind_addr, port), handler)
+server = ThreadingHTTPServer((bind_addr, port), RastercastHandler)
 server.serve_forever()
 PY
 server_pid=$!
@@ -255,158 +160,68 @@ if ! kill -0 "$server_pid" 2>/dev/null; then
 fi
 
 video_filter="scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2:black"
-
-if [[ "$transport" == "hls-vod" ]]; then
-  printf 'rastercast: prebuilding complete HLS playlist before playback; this may take a while\n' >&2
-  ffmpeg \
-    -hide_banner \
-    -loglevel error \
-    -nostdin \
-    -i "$input" \
-    -map 0:v:0 \
-    -map 0:a? \
-    -vf "$video_filter" \
-    -c:v libx264 \
-    -preset ultrafast \
-    -tune zerolatency \
-    -profile:v baseline \
-    -level 3.0 \
-    -b:v 1000k \
-    -maxrate 1000k \
-    -bufsize 2000k \
-    -pix_fmt yuv420p \
-    -g 60 \
-    -keyint_min 60 \
-    -sc_threshold 0 \
-    -c:a aac \
-    -b:a 96k \
-    -ar 44100 \
-    -ac 2 \
-    -f hls \
-    -hls_time 2 \
-    -hls_list_size 0 \
-    -hls_segment_type mpegts \
-    -hls_playlist_type vod \
-    -hls_flags temp_file \
-    -hls_base_url "http://${host_ip}:${port}/" \
-    -hls_segment_filename "${workdir}/seg%05d.ts" \
-    "${workdir}/stream.m3u8" >"${ffmpeg_log}" 2>&1 &
-  stream_path="${workdir}/stream.m3u8"
-  stream_url="http://${host_ip}:${port}/stream.m3u8"
-elif [[ "$transport" == "hls" ]]; then
-  ffmpeg \
-    -hide_banner \
-    -loglevel error \
-    -nostdin \
-    -re \
-    -fflags +genpts \
-    -i "$input" \
-    -map 0:v:0 \
-    -map 0:a? \
-    -vf "$video_filter,fps=30000/1001" \
-    -c:v libx264 \
-    -preset ultrafast \
-    -tune zerolatency \
-    -profile:v baseline \
-    -level 3.0 \
-    -b:v 1000k \
-    -maxrate 1000k \
-    -bufsize 2000k \
-    -pix_fmt yuv420p \
-    -g 60 \
-    -keyint_min 60 \
-    -sc_threshold 0 \
-    -c:a aac \
-    -b:a 96k \
-    -ar 44100 \
-    -ac 2 \
-    -f hls \
-    -hls_time 2 \
-    -hls_list_size 0 \
-    -hls_segment_type mpegts \
-    -hls_playlist_type event \
-    -hls_flags temp_file \
-    -hls_base_url "http://${host_ip}:${port}/" \
-    -hls_segment_filename "${workdir}/seg%05d.ts" \
-    "${workdir}/stream.m3u8" >"${ffmpeg_log}" 2>&1 &
-  stream_path="${workdir}/stream.m3u8"
-  stream_url="http://${host_ip}:${port}/stream.m3u8"
-else
-  ffmpeg \
-    -hide_banner \
-    -loglevel error \
-    -nostdin \
-    -re \
-    -i "$input" \
-    -map 0:v:0 \
-    -map 0:a? \
-    -vf "$video_filter" \
-    -c:v libx264 \
-    -preset ultrafast \
-    -tune zerolatency \
-    -profile:v baseline \
-    -level 3.0 \
-    -b:v 1000k \
-    -maxrate 1000k \
-    -bufsize 2000k \
-    -pix_fmt yuv420p \
-    -g 60 \
-    -keyint_min 60 \
-    -sc_threshold 0 \
-    -c:a mp2 \
-    -b:a 128k \
-    -ar 44100 \
-    -ac 2 \
-    -muxpreload 0 \
-    -muxdelay 0 \
-    -mpegts_flags +resend_headers \
-    -avoid_negative_ts make_zero \
-    -f mpegts \
-    "${workdir}/stream.ts" >"${ffmpeg_log}" 2>&1 &
-  stream_path="${workdir}/stream.ts"
-  stream_url="http://${host_ip}:${port}/stream.ts"
+if [[ -n "$output_fps" ]]; then
+  video_filter="${video_filter},fps=${output_fps}"
 fi
+
+ffmpeg \
+  -hide_banner \
+  -loglevel error \
+  -nostdin \
+  -re \
+  -fflags +genpts \
+  -i "$input" \
+  -map 0:v:0 \
+  -map 0:a? \
+  -vf "$video_filter" \
+  -c:v libx264 \
+  -preset ultrafast \
+  -tune zerolatency \
+  -profile:v baseline \
+  -level 3.0 \
+  -b:v "$video_bitrate" \
+  -maxrate "$video_bitrate" \
+  -bufsize 2000k \
+  -pix_fmt yuv420p \
+  -g 60 \
+  -keyint_min 60 \
+  -sc_threshold 0 \
+  -c:a mp2 \
+  -b:a 128k \
+  -ar 44100 \
+  -ac 2 \
+  -muxpreload 0 \
+  -muxdelay 0 \
+  -mpegts_flags +resend_headers \
+  -avoid_negative_ts make_zero \
+  -f mpegts \
+  "${workdir}/stream.ts" >"${ffmpeg_log}" 2>&1 &
 ffmpeg_pid=$!
+stream_path="${workdir}/stream.ts"
+stream_url="http://${host_ip}:${port}/stream.ts"
 
 stream_is_ready() {
-  [[ -s "$stream_path" ]] || return 1
-  if [[ "$transport" == "hls-vod" ]]; then
-    grep -q '^#EXT-X-ENDLIST' "$stream_path" && compgen -G "${workdir}/seg*.ts" >/dev/null
-    return
-  fi
-  [[ "$transport" == "hls" ]] || return 0
-  compgen -G "${workdir}/seg*.ts" >/dev/null
+  [[ -s "$stream_path" ]]
 }
 
-if [[ "$transport" == "hls-vod" ]]; then
-  if ! wait "$ffmpeg_pid"; then
-    ffmpeg_pid=""
-    touch "$stream_error"
-    printf 'error: ffmpeg failed while exporting the %s stream\n' "$transport" >&2
+deadline=$((SECONDS + startup_timeout))
+while (( SECONDS < deadline )); do
+  if stream_is_ready; then
+    break
+  fi
+  if ! kill -0 "${ffmpeg_pid}" 2>/dev/null; then
+    if wait "${ffmpeg_pid}"; then
+      break
+    fi
+    printf 'error: ffmpeg failed while exporting the MPEG-TS stream\n' >&2
     show_ffmpeg_log
     exit 1
   fi
-  ffmpeg_pid=""
-else
-  deadline=$((SECONDS + startup_timeout))
-  while (( SECONDS < deadline )); do
-    if stream_is_ready; then
-      break
-    fi
-    if ! kill -0 "${ffmpeg_pid}" 2>/dev/null; then
-      if wait "${ffmpeg_pid}"; then
-        break
-      fi
-      printf 'error: ffmpeg failed while exporting the %s stream\n' "$transport" >&2
-      show_ffmpeg_log
-      exit 1
-    fi
-    sleep 0.1
-  done
-fi
+  sleep 0.1
+done
 
 if ! stream_is_ready; then
-  printf 'error: ffmpeg did not produce a playable %s stream within %ss\n' "$transport" "${startup_timeout}" >&2
+  printf 'error: ffmpeg did not produce a playable MPEG-TS stream within %ss\n' "${startup_timeout}" >&2
   show_ffmpeg_log
   exit 1
 fi
@@ -419,7 +234,7 @@ if [[ -n "$ffmpeg_pid" ]]; then
   if ! wait "$ffmpeg_pid"; then
     ffmpeg_pid=""
     touch "$stream_error"
-    printf 'error: ffmpeg failed while exporting the %s stream\n' "$transport" >&2
+    printf 'error: ffmpeg failed while exporting the MPEG-TS stream\n' >&2
     show_ffmpeg_log
     exit 1
   fi

@@ -2,7 +2,7 @@
 
 What if [mister_plex](https://github.com/mrchrisster/mister_plex) without the plex?
 
-Rastercast is a lightweight video streaming path for MiSTerFPGA CRT setups.
+rastercast is a lightweight video streaming path for MiSTerFPGA CRT setups.
 
 It replaces the old Plex/XML workflow with a direct file-to-stream flow:
 
@@ -17,9 +17,7 @@ This keeps the control path simple and avoids Plex, XML URLs, and SAM/Attract Mo
 - `bin/rastercast.sh` runs on the PC
 - `mister/rastercast.sh` runs on the MiSTer
 
-The default implementation uses a continuous MPEG-TS stream with H.264 video and MP2 audio. This avoids the MiSTer `mplayer` HLS playlist reload path, which has proven unreliable.
-
-Event-style HLS is available with `RASTERCAST_TRANSPORT=hls`, and prebuilt VOD HLS is available with `RASTERCAST_TRANSPORT=hls-vod`.
+The implementation uses a continuous MPEG-TS stream with H.264 video and MP2 audio. The default video bitrate is 1000 kbps, matching the `maxVideoBitrate=1000` setting used by `mister_plex`; source FPS is preserved unless overridden.
 
 ## CRT target
 
@@ -42,7 +40,6 @@ PC side:
 MiSTer side:
 
 - `mplayer` with framebuffer support
-- SSH access if you want the PC launcher to start playback remotely
 
 ## Usage
 
@@ -72,14 +69,22 @@ If the PC chooses the wrong address for the printed URL, force it:
 RASTERCAST_HOST_IP=192.168.9.237 bin/rastercast.sh /path/to/video.mkv
 ```
 
-To test live HLS instead:
+Optional tuning:
 
 ```bash
-RASTERCAST_TRANSPORT=hls bin/rastercast.sh /path/to/video.mkv
+RASTERCAST_VIDEO_BITRATE=1000k bin/rastercast.sh /path/to/video.mkv
+RASTERCAST_FPS=30000/1001 bin/rastercast.sh /path/to/video.mkv
+```
+
+If MiSTer reports `Cache empty`, increase the player cache or reduce bitrate:
+
+```bash
+RASTERCAST_CACHE_KB=16384 RASTERCAST_CACHE_MIN=20 /media/fat/Scripts/rastercast.sh "http://pc-host:8090/stream.ts"
+RASTERCAST_VIDEO_BITRATE=700k bin/rastercast.sh /path/to/video.mkv
 ```
 
 ## Notes
 
-- This repository is the first scaffold for the ffmpeg + mplayer approach.
-- The exact playback command line may need tuning for audio device selection and CRT timing.
+- Thanks to [mister_plex](https://github.com/mrchrisster/mister_plex) for the MiSTer playback and CRT setup guidance this project builds on.
+- MiSTer playback uses an 8192 KiB mplayer cache by default to avoid network starvation.
 - The framebuffer centering issue from the current setup is still expected to need calibration work.

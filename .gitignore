@@ -1,5 +1,4 @@
 .rastercast/
-*.m3u8
 *.ts
 *.tmp
 *.log

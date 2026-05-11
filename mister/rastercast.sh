@@ -13,6 +13,8 @@ Expected MiSTer environment:
 
 Environment:
   RASTERCAST_MPLAYER_VO  Optional mplayer video output, e.g. fbdev or fbdev2
+  RASTERCAST_CACHE_KB    MPlayer cache size in KiB (default: 8192)
+  RASTERCAST_CACHE_MIN   Percent cache fill before playback starts (default: 10)
 EOF
 }
 
@@ -77,7 +79,10 @@ elif [[ -x "${mrsampath}/mbc" ]]; then
   "${mrsampath}/mbc" raw_seq :43 || true
 fi
 
-mplayer_args=(-fs)
+cache_kb=${RASTERCAST_CACHE_KB:-8192}
+cache_min=${RASTERCAST_CACHE_MIN:-10}
+
+mplayer_args=(-fs -cache "$cache_kb" -cache-min "$cache_min")
 if [[ -n "${RASTERCAST_MPLAYER_VO:-}" ]]; then
   mplayer_args=(-vo "$RASTERCAST_MPLAYER_VO" "${mplayer_args[@]}")
 fi
