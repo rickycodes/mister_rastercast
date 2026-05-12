@@ -43,9 +43,20 @@ MiSTer side:
 
 - `mplayer` with framebuffer support
 
+## Install on MiSTer
+
+Copy the MiSTer launcher to the scripts folder:
+
+```bash
+scp mister/rastercast.sh root@mister:/media/fat/Scripts/rastercast.sh
+ssh root@mister 'chmod +x /media/fat/Scripts/rastercast.sh'
+```
+
+The default MiSTer SSH login is usually `root` with password `1`; SSH will prompt if you have not configured keys.
+
 ## Usage
 
-Serve a local video from the PC:
+Serve a local video from the PC and launch playback on MiSTer:
 
 ```bash
 bin/rastercast.sh /path/to/video.mkv
@@ -56,13 +67,38 @@ That command:
 - creates a temporary MPEG-TS stream
 - starts a local HTTP server
 - prints the playback URL once the stream file has data
+- deploys the MiSTer launcher if needed
+- starts playback on `mister` over SSH
 
 The first run can take a moment because ffmpeg has to produce initial stream data before playback starts.
 
-Then copy that URL to the MiSTer launcher, or use the launcher directly on the MiSTer:
+By default, rastercast connects to `root@mister`. SSH will prompt normally if you have not configured keys.
+
+Automatic playback uses an interactive SSH TTY so keyboard controls can reach `mplayer`. Press `space` or `p` to pause, and `q` to quit playback and stop the PC stream.
+
+To serve only and copy the printed URL yourself:
+
+```bash
+RASTERCAST_MISTER_AUTO=0 bin/rastercast.sh /path/to/video.mkv
+```
+
+Then open that URL with the MiSTer launcher:
 
 ```bash
 /media/fat/Scripts/rastercast.sh "http://pc-host:8090/stream.ts"
+```
+
+For automatic launch, rastercast checks whether `/media/fat/Scripts/rastercast.sh` exists and is executable on the MiSTer. If it is missing, rastercast deploys `mister/rastercast.sh` with `scp`, marks it executable, then starts playback.
+
+If your MiSTer uses a different host, SSH user, script path, or deploy behavior:
+
+```bash
+RASTERCAST_MISTER_HOST=192.168.9.240 \
+RASTERCAST_MISTER_USER=root \
+RASTERCAST_MISTER_SCRIPT=/media/fat/Scripts/rastercast.sh \
+RASTERCAST_MISTER_DEPLOY=auto \
+RASTERCAST_MISTER_TTY=1 \
+bin/rastercast.sh /path/to/video.mkv
 ```
 
 If the PC chooses the wrong address for the printed URL, force it:

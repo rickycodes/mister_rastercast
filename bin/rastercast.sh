@@ -12,6 +12,12 @@ Environment:
   RASTERCAST_FPS         Optional output video FPS override, e.g. 30000/1001
   RASTERCAST_VIDEO_BITRATE  Output video bitrate (default: 1000k)
   RASTERCAST_STARTUP_TIMEOUT  Seconds to wait for stream startup (default: 30)
+  RASTERCAST_MISTER_AUTO  Automatically launch playback on MiSTer: 1 or 0 (default: 1)
+  RASTERCAST_MISTER_HOST  MiSTer host/IP (default: mister)
+  RASTERCAST_MISTER_USER  MiSTer SSH user (default: root)
+  RASTERCAST_MISTER_SCRIPT  MiSTer script path (default: /media/fat/Scripts/rastercast.sh)
+  RASTERCAST_MISTER_DEPLOY  Deploy MiSTer script when missing: auto, always, never (default: auto)
+  RASTERCAST_MISTER_TTY  Allocate TTY for remote playback controls: 1 or 0 (default: 1)
 EOF
 }
 
@@ -30,6 +36,9 @@ fi
 require_command ffmpeg
 require_command python3
 
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_dir=$(cd -- "${script_dir}/.." && pwd)
+
 input=$1
 if [[ ! -f "$input" ]]; then
   printf 'error: input file not found: %s\n' "$input" >&2
@@ -41,6 +50,12 @@ port=${RASTERCAST_PORT:-8090}
 output_fps=${RASTERCAST_FPS:-}
 video_bitrate=${RASTERCAST_VIDEO_BITRATE:-1000k}
 startup_timeout=${RASTERCAST_STARTUP_TIMEOUT:-30}
+mister_auto=${RASTERCAST_MISTER_AUTO:-1}
+mister_host=${RASTERCAST_MISTER_HOST:-mister}
+mister_user=${RASTERCAST_MISTER_USER:-root}
+mister_script=${RASTERCAST_MISTER_SCRIPT:-/media/fat/Scripts/rastercast.sh}
+mister_deploy=${RASTERCAST_MISTER_DEPLOY:-auto}
+mister_tty=${RASTERCAST_MISTER_TTY:-1}
 
 host_ip=${RASTERCAST_HOST_IP:-}
 if [[ -z "$host_ip" ]]; then
@@ -71,6 +86,86 @@ show_server_log() {
     sed -n '1,80p' "${server_log}" >&2
     printf '%s\n' '--------------------' >&2
   fi
+}
+
+run_mister_ssh() {
+  # shellcheck disable=SC2029
+  ssh "${mister_user}@${mister_host}" "$@"
+}
+
+run_mister_playback() {
+  case "$mister_tty" in
+    1 | yes | true)
+      # shellcheck disable=SC2029
+      ssh -t "${mister_user}@${mister_host}" "$@"
+      ;;
+    0 | no | false)
+      run_mister_ssh "$@"
+      ;;
+    *)
+      printf 'error: RASTERCAST_MISTER_TTY must be 1 or 0\n' >&2
+      exit 1
+      ;;
+  esac
+}
+
+run_mister_scp() {
+  scp "$@"
+}
+
+deploy_mister_script() {
+  local local_script="${repo_dir}/mister/rastercast.sh"
+
+  if [[ ! -f "$local_script" ]]; then
+    printf 'error: local MiSTer script not found: %s\n' "$local_script" >&2
+    exit 1
+  fi
+
+  printf 'rastercast: deploying MiSTer script to %s@%s:%s\n' "$mister_user" "$mister_host" "$mister_script" >&2
+  run_mister_scp "$local_script" "${mister_user}@${mister_host}:${mister_script}"
+  run_mister_ssh "chmod +x '$mister_script'"
+}
+
+launch_mister() {
+  case "$mister_auto" in
+    1 | yes | true)
+      ;;
+    0 | no | false)
+      return
+      ;;
+    *)
+      printf 'error: RASTERCAST_MISTER_AUTO must be 1 or 0\n' >&2
+      exit 1
+      ;;
+  esac
+
+  if [[ "$mister_script" == *"'"* ]]; then
+    printf "error: RASTERCAST_MISTER_SCRIPT cannot contain a single quote\n" >&2
+    exit 1
+  fi
+
+  require_command ssh
+  require_command scp
+
+  case "$mister_deploy" in
+    always)
+      deploy_mister_script
+      ;;
+    auto)
+      if ! run_mister_ssh "test -x '$mister_script'"; then
+        deploy_mister_script
+      fi
+      ;;
+    never)
+      ;;
+    *)
+      printf 'error: RASTERCAST_MISTER_DEPLOY must be auto, always, or never\n' >&2
+      exit 1
+      ;;
+  esac
+
+  printf 'rastercast: launching MiSTer playback on %s@%s\n' "$mister_user" "$mister_host" >&2
+  run_mister_playback "'$mister_script' '$stream_url'"
 }
 
 cleanup() {
@@ -239,6 +334,7 @@ fi
 printf 'rastercast: serving %s\n' "$stream_url" >&2
 printf 'rastercast: open this URL on the MiSTer with mplayer\n' >&2
 printf '%s\n' "$stream_url"
+launch_mister
 
 if [[ -n "$ffmpeg_pid" ]]; then
   if ! wait "$ffmpeg_pid"; then
