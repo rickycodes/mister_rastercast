@@ -71,6 +71,9 @@ ffmpeg_log="${workdir}/ffmpeg.log"
 server_log="${workdir}/server.log"
 stream_done="${workdir}/stream.done"
 stream_error="${workdir}/stream.error"
+ssh_control_path="${workdir}/ssh-control-%r@%h:%p"
+ssh_opts=(-o ControlMaster=auto -o ControlPersist=60 -o "ControlPath=${ssh_control_path}")
+mister_ssh_used=""
 
 show_ffmpeg_log() {
   if [[ -f "${ffmpeg_log}" ]]; then
@@ -89,15 +92,17 @@ show_server_log() {
 }
 
 run_mister_ssh() {
+  mister_ssh_used=1
   # shellcheck disable=SC2029
-  ssh "${mister_user}@${mister_host}" "$@"
+  ssh "${ssh_opts[@]}" "${mister_user}@${mister_host}" "$@"
 }
 
 run_mister_playback() {
   case "$mister_tty" in
     1 | yes | true)
+      mister_ssh_used=1
       # shellcheck disable=SC2029
-      ssh -t "${mister_user}@${mister_host}" "$@"
+      ssh "${ssh_opts[@]}" -t "${mister_user}@${mister_host}" "$@"
       ;;
     0 | no | false)
       run_mister_ssh "$@"
@@ -110,10 +115,11 @@ run_mister_playback() {
 }
 
 run_mister_scp() {
-  scp "$@"
+  mister_ssh_used=1
+  scp "${ssh_opts[@]}" "$@"
 }
 
-deploy_mister_script() {
+copy_mister_script() {
   local local_script="${repo_dir}/mister/rastercast.sh"
 
   if [[ ! -f "$local_script" ]]; then
@@ -123,7 +129,6 @@ deploy_mister_script() {
 
   printf 'rastercast: deploying MiSTer script to %s@%s:%s\n' "$mister_user" "$mister_host" "$mister_script" >&2
   run_mister_scp "$local_script" "${mister_user}@${mister_host}:${mister_script}"
-  run_mister_ssh "chmod +x '$mister_script'"
 }
 
 launch_mister() {
@@ -149,11 +154,11 @@ launch_mister() {
 
   case "$mister_deploy" in
     always)
-      deploy_mister_script
+      copy_mister_script
       ;;
     auto)
       if ! run_mister_ssh "test -x '$mister_script'"; then
-        deploy_mister_script
+        copy_mister_script
       fi
       ;;
     never)
@@ -165,7 +170,7 @@ launch_mister() {
   esac
 
   printf 'rastercast: launching MiSTer playback on %s@%s\n' "$mister_user" "$mister_host" >&2
-  run_mister_playback "'$mister_script' '$stream_url'"
+  run_mister_playback "chmod +x '$mister_script' && exec '$mister_script' '$stream_url'"
 }
 
 cleanup() {
@@ -179,6 +184,10 @@ cleanup() {
   if [[ -n "${server_pid}" ]] && kill -0 "${server_pid}" 2>/dev/null; then
     kill "${server_pid}" 2>/dev/null || true
     wait "${server_pid}" 2>/dev/null || true
+  fi
+
+  if [[ -n "${mister_ssh_used}" ]] && command -v ssh >/dev/null 2>&1; then
+    ssh "${ssh_opts[@]}" -O exit "${mister_user}@${mister_host}" >/dev/null 2>&1 || true
   fi
 
   rm -rf "${workdir}"
