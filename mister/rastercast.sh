@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2034
 set -euo pipefail
 
 usage() {
@@ -44,15 +45,10 @@ if [[ -f "$sam_source" ]]; then
 fi
 
 # These are read by SAM helper functions when they are available.
-# shellcheck disable=SC2034
 sv_inimod="yes"
-# shellcheck disable=SC2034
 samvideo_output="CRT"
-# shellcheck disable=SC2034
 samvideo_source="youtube"
-# shellcheck disable=SC2034
 samvideo_crtmode320="video_mode=320,-16,32,32,240,1,3,13,5670"
-# shellcheck disable=SC2034
 VIDEO_RES="320x240"
 
 if [[ -z "${mrsampath:-}" ]]; then

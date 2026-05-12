@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Basic helpers
+
 usage() {
   cat <<'EOF'
 Usage: rastercast.sh <video-file-or-url>
@@ -38,68 +40,6 @@ is_ytdlp_url() {
   [[ "$1" =~ ^https?://([^/?#]+\.)?(youtube\.com|youtu\.be)([/?#]|$) ]]
 }
 
-if [[ ${1:-} == "" || ${1:-} == "-h" || ${1:-} == "--help" ]]; then
-  usage
-  exit 0
-fi
-
-require_command ffmpeg
-require_command python3
-
-script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo_dir=$(cd -- "${script_dir}/.." && pwd)
-
-input=$1
-input_uses_ytdlp=0
-ytdlp_mode=${RASTERCAST_YTDLP:-auto}
-case "$ytdlp_mode" in
-  auto | 1 | 0)
-    ;;
-  *)
-    printf 'error: RASTERCAST_YTDLP must be auto, 1, or 0\n' >&2
-    exit 1
-    ;;
-esac
-
-if [[ "$ytdlp_mode" == "1" ]] || { [[ "$ytdlp_mode" == "auto" ]] && is_ytdlp_url "$input"; }; then
-  input_uses_ytdlp=1
-  require_command yt-dlp
-elif ! is_http_url "$input" && [[ ! -f "$input" ]]; then
-  printf 'error: input file not found: %s\n' "$input" >&2
-  exit 1
-fi
-
-bind_addr=${RASTERCAST_BIND_ADDR:-0.0.0.0}
-port=${RASTERCAST_PORT:-8090}
-output_fps=${RASTERCAST_FPS:-}
-video_bitrate=${RASTERCAST_VIDEO_BITRATE:-1000k}
-ytdlp_format=${RASTERCAST_YTDLP_FORMAT:-best[height<=480]/best}
-startup_timeout=${RASTERCAST_STARTUP_TIMEOUT:-30}
-mister_auto=${RASTERCAST_MISTER_AUTO:-1}
-mister_host=${RASTERCAST_MISTER_HOST:-mister}
-mister_user=${RASTERCAST_MISTER_USER:-root}
-mister_script=${RASTERCAST_MISTER_SCRIPT:-/media/fat/Scripts/rastercast.sh}
-mister_deploy=${RASTERCAST_MISTER_DEPLOY:-auto}
-mister_tty=${RASTERCAST_MISTER_TTY:-1}
-
-host_ip=${RASTERCAST_HOST_IP:-}
-if [[ -z "$host_ip" ]]; then
-  host_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
-  if [[ -z "${host_ip:-}" ]]; then
-    host_ip=127.0.0.1
-  fi
-fi
-workdir=$(mktemp -d "${TMPDIR:-/tmp}/rastercast.XXXXXX")
-server_pid=""
-ffmpeg_pid=""
-ffmpeg_log="${workdir}/ffmpeg.log"
-server_log="${workdir}/server.log"
-stream_done="${workdir}/stream.done"
-stream_error="${workdir}/stream.error"
-ssh_control_path="${workdir}/ssh-control-%r@%h:%p"
-ssh_opts=(-o ControlMaster=auto -o ControlPersist=60 -o "ControlPath=${ssh_control_path}")
-mister_ssh_used=""
-
 show_ffmpeg_log() {
   if [[ -f "${ffmpeg_log}" ]]; then
     printf '%s\n' '---- ffmpeg log ----' >&2
@@ -115,6 +55,83 @@ show_server_log() {
     printf '%s\n' '--------------------' >&2
   fi
 }
+
+# Configuration
+
+load_config() {
+  script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+  repo_dir=$(cd -- "${script_dir}/.." && pwd)
+
+  input=$1
+  input_uses_ytdlp=0
+  ytdlp_mode=${RASTERCAST_YTDLP:-auto}
+
+  bind_addr=${RASTERCAST_BIND_ADDR:-0.0.0.0}
+  port=${RASTERCAST_PORT:-8090}
+  output_fps=${RASTERCAST_FPS:-}
+  video_bitrate=${RASTERCAST_VIDEO_BITRATE:-1000k}
+  ytdlp_format=${RASTERCAST_YTDLP_FORMAT:-best[height<=480]/best}
+  startup_timeout=${RASTERCAST_STARTUP_TIMEOUT:-30}
+
+  mister_auto=${RASTERCAST_MISTER_AUTO:-1}
+  mister_host=${RASTERCAST_MISTER_HOST:-mister}
+  mister_user=${RASTERCAST_MISTER_USER:-root}
+  mister_script=${RASTERCAST_MISTER_SCRIPT:-/media/fat/Scripts/rastercast.sh}
+  mister_deploy=${RASTERCAST_MISTER_DEPLOY:-auto}
+  mister_tty=${RASTERCAST_MISTER_TTY:-1}
+
+  host_ip=${RASTERCAST_HOST_IP:-}
+}
+
+resolve_host_ip() {
+  if [[ -n "$host_ip" ]]; then
+    return
+  fi
+
+  host_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
+  if [[ -z "${host_ip:-}" ]]; then
+    host_ip=127.0.0.1
+  fi
+}
+
+prepare_workdir() {
+  workdir=$(mktemp -d "${TMPDIR:-/tmp}/rastercast.XXXXXX")
+  server_pid=""
+  ffmpeg_pid=""
+  ffmpeg_log="${workdir}/ffmpeg.log"
+  server_log="${workdir}/server.log"
+  stream_path="${workdir}/stream.ts"
+  stream_done="${workdir}/stream.done"
+  stream_error="${workdir}/stream.error"
+  stream_url="http://${host_ip}:${port}/stream.ts"
+  ssh_control_path="${workdir}/ssh-control-%r@%h:%p"
+  ssh_opts=(-o ControlMaster=auto -o ControlPersist=60 -o "ControlPath=${ssh_control_path}")
+  mister_ssh_used=""
+}
+
+validate_config() {
+  require_command ffmpeg
+  require_command python3
+
+  case "$ytdlp_mode" in
+    auto | 1 | 0)
+      ;;
+    *)
+      printf 'error: RASTERCAST_YTDLP must be auto, 1, or 0\n' >&2
+      exit 1
+      ;;
+  esac
+
+  if [[ "$ytdlp_mode" == "1" ]] || { [[ "$ytdlp_mode" == "auto" ]] && is_ytdlp_url "$input"; }; then
+    input_uses_ytdlp=1
+    require_command yt-dlp
+  elif ! is_http_url "$input" && [[ ! -f "$input" ]]; then
+    printf 'error: input file not found: %s\n' "$input" >&2
+    exit 1
+  fi
+}
+
+# MiSTer control
 
 run_mister_ssh() {
   mister_ssh_used=1
@@ -198,6 +215,8 @@ launch_mister() {
   run_mister_playback "chmod +x '$mister_script' && exec '$mister_script' '$stream_url'"
 }
 
+# Process lifecycle
+
 cleanup() {
   local status=$?
 
@@ -218,113 +237,147 @@ cleanup() {
   rm -rf "${workdir}"
   exit "${status}"
 }
-trap cleanup EXIT INT TERM
 
-printf 'rastercast: exporting MPEG-TS stream into %s\n' "$workdir" >&2
+start_server() {
+  python3 "${script_dir}/rastercast-server.py" "$bind_addr" "$port" "$workdir" >"${server_log}" 2>&1 &
+  server_pid=$!
+  sleep 0.1
 
-python3 "${script_dir}/rastercast-server.py" "$bind_addr" "$port" "$workdir" >"${server_log}" 2>&1 &
-server_pid=$!
-sleep 0.1
-if ! kill -0 "$server_pid" 2>/dev/null; then
-  printf 'error: HTTP server failed to start on %s:%s\n' "$bind_addr" "$port" >&2
-  show_server_log
-  exit 1
-fi
+  if ! kill -0 "$server_pid" 2>/dev/null; then
+    printf 'error: HTTP server failed to start on %s:%s\n' "$bind_addr" "$port" >&2
+    show_server_log
+    exit 1
+  fi
+}
 
-video_filter="scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2:black"
-if [[ -n "$output_fps" ]]; then
-  video_filter="${video_filter},fps=${output_fps}"
-fi
+start_ffmpeg() {
+  local video_filter="scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2:black"
+  if [[ -n "$output_fps" ]]; then
+    video_filter="${video_filter},fps=${output_fps}"
+  fi
 
-ffmpeg_args=(
-  -hide_banner
-  -loglevel error
-  -nostdin
-  -re
-  -fflags +genpts
-)
-ffmpeg_output_args=(
-  -map 0:v:0
-  -map 0:a?
-  -vf "$video_filter"
-  -c:v libx264
-  -preset ultrafast
-  -tune zerolatency
-  -profile:v baseline
-  -level 3.0
-  -b:v "$video_bitrate"
-  -maxrate "$video_bitrate"
-  -bufsize 2000k
-  -pix_fmt yuv420p
-  -g 60
-  -keyint_min 60
-  -sc_threshold 0
-  -c:a mp2
-  -b:a 128k
-  -ar 44100
-  -ac 2
-  -muxpreload 0
-  -muxdelay 0
-  -mpegts_flags +resend_headers
-  -avoid_negative_ts make_zero
-  -f mpegts
-  "${workdir}/stream.ts"
-)
-if (( input_uses_ytdlp )); then
-  printf 'rastercast: resolving URL input with yt-dlp\n' >&2
-  set +o pipefail
-  yt-dlp -f "$ytdlp_format" -o - "$input" 2>>"${ffmpeg_log}" \
-    | ffmpeg "${ffmpeg_args[@]}" -i pipe:0 "${ffmpeg_output_args[@]}" >>"${ffmpeg_log}" 2>&1 &
-  set -o pipefail
-else
-  ffmpeg "${ffmpeg_args[@]}" -i "$input" "${ffmpeg_output_args[@]}" \
-    >"${ffmpeg_log}" 2>&1 &
-fi
-ffmpeg_pid=$!
-stream_path="${workdir}/stream.ts"
-stream_url="http://${host_ip}:${port}/stream.ts"
+  local ffmpeg_args=(
+    -hide_banner
+    -loglevel error
+    -nostdin
+    -re
+    -fflags +genpts
+  )
+  local ffmpeg_output_args=(
+    -map 0:v:0
+    -map 0:a?
+    -vf "$video_filter"
+    -c:v libx264
+    -preset ultrafast
+    -tune zerolatency
+    -profile:v baseline
+    -level 3.0
+    -b:v "$video_bitrate"
+    -maxrate "$video_bitrate"
+    -bufsize 2000k
+    -pix_fmt yuv420p
+    -g 60
+    -keyint_min 60
+    -sc_threshold 0
+    -c:a mp2
+    -b:a 128k
+    -ar 44100
+    -ac 2
+    -muxpreload 0
+    -muxdelay 0
+    -mpegts_flags +resend_headers
+    -avoid_negative_ts make_zero
+    -f mpegts
+    "$stream_path"
+  )
+
+  if (( input_uses_ytdlp )); then
+    printf 'rastercast: resolving URL input with yt-dlp\n' >&2
+    set +o pipefail
+    yt-dlp -f "$ytdlp_format" -o - "$input" 2>>"${ffmpeg_log}" \
+      | ffmpeg "${ffmpeg_args[@]}" -i pipe:0 "${ffmpeg_output_args[@]}" >>"${ffmpeg_log}" 2>&1 &
+    set -o pipefail
+  else
+    ffmpeg "${ffmpeg_args[@]}" -i "$input" "${ffmpeg_output_args[@]}" \
+      >"${ffmpeg_log}" 2>&1 &
+  fi
+  ffmpeg_pid=$!
+}
 
 stream_is_ready() {
   [[ -s "$stream_path" ]]
 }
 
-deadline=$((SECONDS + startup_timeout))
-while (( SECONDS < deadline )); do
-  if stream_is_ready; then
-    break
-  fi
-  if ! kill -0 "${ffmpeg_pid}" 2>/dev/null; then
-    if wait "${ffmpeg_pid}"; then
-      break
+wait_for_stream_startup() {
+  local deadline=$((SECONDS + startup_timeout))
+
+  while (( SECONDS < deadline )); do
+    if stream_is_ready; then
+      return
     fi
-    printf 'error: ffmpeg failed while exporting the MPEG-TS stream\n' >&2
+
+    if ! kill -0 "${ffmpeg_pid}" 2>/dev/null; then
+      if wait "${ffmpeg_pid}"; then
+        return
+      fi
+      printf 'error: ffmpeg failed while exporting the MPEG-TS stream\n' >&2
+      show_ffmpeg_log
+      exit 1
+    fi
+    sleep 0.1
+  done
+
+  if ! stream_is_ready; then
+    printf 'error: ffmpeg did not produce a playable MPEG-TS stream within %ss\n' "${startup_timeout}" >&2
     show_ffmpeg_log
     exit 1
   fi
-  sleep 0.1
-done
+}
 
-if ! stream_is_ready; then
-  printf 'error: ffmpeg did not produce a playable MPEG-TS stream within %ss\n' "${startup_timeout}" >&2
-  show_ffmpeg_log
-  exit 1
-fi
+print_stream_url() {
+  printf 'rastercast: serving %s\n' "$stream_url" >&2
+  printf 'rastercast: open this URL on the MiSTer with mplayer\n' >&2
+  printf '%s\n' "$stream_url"
+}
 
-printf 'rastercast: serving %s\n' "$stream_url" >&2
-printf 'rastercast: open this URL on the MiSTer with mplayer\n' >&2
-printf '%s\n' "$stream_url"
-launch_mister
-
-if [[ -n "$ffmpeg_pid" ]]; then
-  if ! wait "$ffmpeg_pid"; then
+wait_for_ffmpeg() {
+  if [[ -n "$ffmpeg_pid" ]]; then
+    if ! wait "$ffmpeg_pid"; then
+      ffmpeg_pid=""
+      touch "$stream_error"
+      printf 'error: ffmpeg failed while exporting the MPEG-TS stream\n' >&2
+      show_ffmpeg_log
+      exit 1
+    fi
     ffmpeg_pid=""
-    touch "$stream_error"
-    printf 'error: ffmpeg failed while exporting the MPEG-TS stream\n' >&2
-    show_ffmpeg_log
-    exit 1
   fi
-  ffmpeg_pid=""
-fi
-touch "$stream_done"
 
-wait "$server_pid"
+  touch "$stream_done"
+}
+
+# Main
+
+main() {
+  if [[ ${1:-} == "" || ${1:-} == "-h" || ${1:-} == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  load_config "$1"
+  validate_config
+  resolve_host_ip
+  prepare_workdir
+  trap cleanup EXIT INT TERM
+
+  printf 'rastercast: exporting MPEG-TS stream into %s\n' "$workdir" >&2
+  start_server
+  start_ffmpeg
+  wait_for_stream_startup
+  print_stream_url
+  launch_mister
+  wait_for_ffmpeg
+
+  wait "$server_pid"
+}
+
+main "$@"
