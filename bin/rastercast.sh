@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: rastercast.sh <video-file>
+Usage: rastercast.sh <video-file-or-url>
 
 Environment:
   RASTERCAST_BIND_ADDR   HTTP bind address (default: 0.0.0.0)
@@ -11,6 +11,8 @@ Environment:
   RASTERCAST_PORT        HTTP port (default: 8090)
   RASTERCAST_FPS         Optional output video FPS override, e.g. 30000/1001
   RASTERCAST_VIDEO_BITRATE  Output video bitrate (default: 1000k)
+  RASTERCAST_YTDLP       Force yt-dlp for URL input: 1 or 0 (default: auto)
+  RASTERCAST_YTDLP_FORMAT  yt-dlp format for URL inputs (default: best[height<=480]/best)
   RASTERCAST_STARTUP_TIMEOUT  Seconds to wait for stream startup (default: 30)
   RASTERCAST_MISTER_AUTO  Automatically launch playback on MiSTer: 1 or 0 (default: 1)
   RASTERCAST_MISTER_HOST  MiSTer host/IP (default: mister)
@@ -28,6 +30,14 @@ require_command() {
   fi
 }
 
+is_http_url() {
+  [[ "$1" =~ ^https?:// ]]
+}
+
+is_ytdlp_url() {
+  [[ "$1" =~ ^https?://([^/?#]+\.)?(youtube\.com|youtu\.be)([/?#]|$) ]]
+}
+
 if [[ ${1:-} == "" || ${1:-} == "-h" || ${1:-} == "--help" ]]; then
   usage
   exit 0
@@ -40,7 +50,21 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd -- "${script_dir}/.." && pwd)
 
 input=$1
-if [[ ! -f "$input" ]]; then
+input_uses_ytdlp=0
+ytdlp_mode=${RASTERCAST_YTDLP:-auto}
+case "$ytdlp_mode" in
+  auto | 1 | 0)
+    ;;
+  *)
+    printf 'error: RASTERCAST_YTDLP must be auto, 1, or 0\n' >&2
+    exit 1
+    ;;
+esac
+
+if [[ "$ytdlp_mode" == "1" ]] || { [[ "$ytdlp_mode" == "auto" ]] && is_ytdlp_url "$input"; }; then
+  input_uses_ytdlp=1
+  require_command yt-dlp
+elif ! is_http_url "$input" && [[ ! -f "$input" ]]; then
   printf 'error: input file not found: %s\n' "$input" >&2
   exit 1
 fi
@@ -49,6 +73,7 @@ bind_addr=${RASTERCAST_BIND_ADDR:-0.0.0.0}
 port=${RASTERCAST_PORT:-8090}
 output_fps=${RASTERCAST_FPS:-}
 video_bitrate=${RASTERCAST_VIDEO_BITRATE:-1000k}
+ytdlp_format=${RASTERCAST_YTDLP_FORMAT:-best[height<=480]/best}
 startup_timeout=${RASTERCAST_STARTUP_TIMEOUT:-30}
 mister_auto=${RASTERCAST_MISTER_AUTO:-1}
 mister_host=${RASTERCAST_MISTER_HOST:-mister}
@@ -278,38 +303,50 @@ if [[ -n "$output_fps" ]]; then
   video_filter="${video_filter},fps=${output_fps}"
 fi
 
-ffmpeg \
-  -hide_banner \
-  -loglevel error \
-  -nostdin \
-  -re \
-  -fflags +genpts \
-  -i "$input" \
-  -map 0:v:0 \
-  -map 0:a? \
-  -vf "$video_filter" \
-  -c:v libx264 \
-  -preset ultrafast \
-  -tune zerolatency \
-  -profile:v baseline \
-  -level 3.0 \
-  -b:v "$video_bitrate" \
-  -maxrate "$video_bitrate" \
-  -bufsize 2000k \
-  -pix_fmt yuv420p \
-  -g 60 \
-  -keyint_min 60 \
-  -sc_threshold 0 \
-  -c:a mp2 \
-  -b:a 128k \
-  -ar 44100 \
-  -ac 2 \
-  -muxpreload 0 \
-  -muxdelay 0 \
-  -mpegts_flags +resend_headers \
-  -avoid_negative_ts make_zero \
-  -f mpegts \
-  "${workdir}/stream.ts" >"${ffmpeg_log}" 2>&1 &
+ffmpeg_args=(
+  -hide_banner
+  -loglevel error
+  -nostdin
+  -re
+  -fflags +genpts
+)
+ffmpeg_output_args=(
+  -map 0:v:0
+  -map 0:a?
+  -vf "$video_filter"
+  -c:v libx264
+  -preset ultrafast
+  -tune zerolatency
+  -profile:v baseline
+  -level 3.0
+  -b:v "$video_bitrate"
+  -maxrate "$video_bitrate"
+  -bufsize 2000k
+  -pix_fmt yuv420p
+  -g 60
+  -keyint_min 60
+  -sc_threshold 0
+  -c:a mp2
+  -b:a 128k
+  -ar 44100
+  -ac 2
+  -muxpreload 0
+  -muxdelay 0
+  -mpegts_flags +resend_headers
+  -avoid_negative_ts make_zero
+  -f mpegts
+  "${workdir}/stream.ts"
+)
+if (( input_uses_ytdlp )); then
+  printf 'rastercast: resolving URL input with yt-dlp\n' >&2
+  set +o pipefail
+  yt-dlp -f "$ytdlp_format" -o - "$input" 2>>"${ffmpeg_log}" \
+    | ffmpeg "${ffmpeg_args[@]}" -i pipe:0 "${ffmpeg_output_args[@]}" >>"${ffmpeg_log}" 2>&1 &
+  set -o pipefail
+else
+  ffmpeg "${ffmpeg_args[@]}" -i "$input" "${ffmpeg_output_args[@]}" \
+    >"${ffmpeg_log}" 2>&1 &
+fi
 ffmpeg_pid=$!
 stream_path="${workdir}/stream.ts"
 stream_url="http://${host_ip}:${port}/stream.ts"

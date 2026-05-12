@@ -38,6 +38,7 @@ PC side:
 
 - `ffmpeg`
 - `python3`
+- `yt-dlp` for YouTube inputs
 
 MiSTer side:
 
@@ -60,6 +61,18 @@ Serve a local video from the PC and launch playback on MiSTer:
 
 ```bash
 bin/rastercast.sh /path/to/video.mkv
+```
+
+Or stream a YouTube URL through `yt-dlp`:
+
+```bash
+bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+```
+
+Direct HTTP(S) media URLs are passed to `ffmpeg` without `yt-dlp`:
+
+```bash
+bin/rastercast.sh "https://pc-host/video.mp4"
 ```
 
 That command:
@@ -112,6 +125,8 @@ Optional tuning:
 ```bash
 RASTERCAST_VIDEO_BITRATE=1000k bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_FPS=30000/1001 bin/rastercast.sh /path/to/video.mkv
+RASTERCAST_YTDLP=1 bin/rastercast.sh "https://example.com/video-page"
+RASTERCAST_YTDLP_FORMAT='best[height<=480]/best' bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
 If MiSTer reports `Cache empty`, increase the player cache or reduce bitrate:
@@ -124,5 +139,6 @@ RASTERCAST_VIDEO_BITRATE=700k bin/rastercast.sh /path/to/video.mkv
 ## Notes
 
 - Thanks to [mister_plex](https://github.com/mrchrisster/mister_plex) for the MiSTer playback and CRT setup guidance this project builds on.
+- YouTube input relies on `yt-dlp`; keep it updated and only stream content you are authorized to access this way.
 - MiSTer playback uses an 8192 KiB mplayer cache by default to avoid network starvation.
 - The framebuffer centering issue from the current setup is still expected to need calibration work.
