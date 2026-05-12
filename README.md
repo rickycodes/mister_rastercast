@@ -125,9 +125,13 @@ Optional tuning:
 ```bash
 RASTERCAST_VIDEO_BITRATE=1000k bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_FPS=30000/1001 bin/rastercast.sh /path/to/video.mkv
+RASTERCAST_VIDEO_FIT=cover bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_VIDEO_FIT=contain bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP=1 bin/rastercast.sh "https://example.com/video-page"
 RASTERCAST_YTDLP_FORMAT='best[height<=480]/best' bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
+
+`RASTERCAST_VIDEO_FIT=auto` is the default. It uses letterboxing for local files and direct media URLs, but center-crops `yt-dlp` inputs to fill the 320x240 CRT frame.
 
 If MiSTer reports `Cache empty`, increase the player cache or reduce bitrate:
 

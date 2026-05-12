@@ -13,6 +13,7 @@ Environment:
   RASTERCAST_PORT        HTTP port (default: 8090)
   RASTERCAST_FPS         Optional output video FPS override, e.g. 30000/1001
   RASTERCAST_VIDEO_BITRATE  Output video bitrate (default: 1000k)
+  RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
   RASTERCAST_YTDLP       Force yt-dlp for URL input: 1 or 0 (default: auto)
   RASTERCAST_YTDLP_FORMAT  yt-dlp format for URL inputs (default: best[height<=480]/best)
   RASTERCAST_STARTUP_TIMEOUT  Seconds to wait for stream startup (default: 30)
@@ -70,6 +71,7 @@ load_config() {
   port=${RASTERCAST_PORT:-8090}
   output_fps=${RASTERCAST_FPS:-}
   video_bitrate=${RASTERCAST_VIDEO_BITRATE:-1000k}
+  video_fit=${RASTERCAST_VIDEO_FIT:-auto}
   ytdlp_format=${RASTERCAST_YTDLP_FORMAT:-best[height<=480]/best}
   startup_timeout=${RASTERCAST_STARTUP_TIMEOUT:-30}
 
@@ -118,6 +120,15 @@ validate_config() {
       ;;
     *)
       printf 'error: RASTERCAST_YTDLP must be auto, 1, or 0\n' >&2
+      exit 1
+      ;;
+  esac
+
+  case "$video_fit" in
+    auto | contain | cover)
+      ;;
+    *)
+      printf 'error: RASTERCAST_VIDEO_FIT must be auto, contain, or cover\n' >&2
       exit 1
       ;;
   esac
@@ -251,7 +262,26 @@ start_server() {
 }
 
 start_ffmpeg() {
-  local video_filter="scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2:black"
+  local fit="$video_fit"
+  local video_filter
+
+  if [[ "$fit" == "auto" ]]; then
+    if (( input_uses_ytdlp )); then
+      fit=cover
+    else
+      fit=contain
+    fi
+  fi
+
+  case "$fit" in
+    contain)
+      video_filter="scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2:black"
+      ;;
+    cover)
+      video_filter="scale=320:240:force_original_aspect_ratio=increase,crop=320:240"
+      ;;
+  esac
+
   if [[ -n "$output_fps" ]]; then
     video_filter="${video_filter},fps=${output_fps}"
   fi
