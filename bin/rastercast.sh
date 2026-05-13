@@ -15,7 +15,7 @@ Environment:
   RASTERCAST_VIDEO_BITRATE  Output video bitrate (default: 1000k)
   RASTERCAST_VIDEO_SIZE  Output video size as WIDTHxHEIGHT (default: 320x240)
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
-  RASTERCAST_VIDEO_EFFECT  Video effect: none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp
+  RASTERCAST_VIDEO_EFFECT  Comma-separated video effects, or none
   RASTERCAST_VIDEO_SPEED  Playback speed multiplier, from 0.5 to 2.0 (default: 1)
   RASTERCAST_AUDIO_EFFECT  Audio effect: none, echo, robot, radio, deep, chipmunk
   RASTERCAST_YTDLP       Force yt-dlp for URL input: 1 or 0 (default: auto)
@@ -156,14 +156,7 @@ validate_config() {
   video_width=${video_size%x*}
   video_height=${video_size#*x}
 
-  case "$video_effect" in
-    none | acid | trails | edges | ghost | matrix | rgbshift | negative | warp | wobble | feedback | scanwarp)
-      ;;
-    *)
-      printf 'error: RASTERCAST_VIDEO_EFFECT must be one of: none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp\n' >&2
-      exit 1
-      ;;
-  esac
+  validate_video_effects
 
   case "$audio_effect" in
     none | echo | robot | radio | deep | chipmunk)
@@ -190,6 +183,87 @@ validate_config() {
     printf 'error: input file not found: %s\n' "$input" >&2
     exit 1
   fi
+}
+
+video_effect_filter() {
+  case "$1" in
+    none)
+      printf '%s\n' ""
+      ;;
+    acid)
+      printf '%s\n' "hue=h=2*PI*t:s=2,eq=contrast=1.2:saturation=1.8"
+      ;;
+    trails)
+      printf '%s\n' "tmix=frames=5:weights='1 1 1 1 1'"
+      ;;
+    edges)
+      printf '%s\n' "edgedetect=low=0.1:high=0.4"
+      ;;
+    ghost)
+      printf '%s\n' "lagfun=decay=0.9"
+      ;;
+    matrix)
+      printf '%s\n' "eq=contrast=1.25:saturation=0.65:brightness=-0.03,colorchannelmixer=rr=0.55:rg=0.30:rb=0.05:gr=0.20:gg=0.90:gb=0.20:br=0.02:bg=0.20:bb=0.18"
+      ;;
+    rgbshift)
+      printf '%s\n' "rgbashift=rh=4:bh=-4"
+      ;;
+    negative)
+      printf '%s\n' "negate"
+      ;;
+    warp)
+      printf '%s\n' "lenscorrection=k1=-0.25:k2=0.08:i=bilinear"
+      ;;
+    wobble)
+      printf '%s\n' "rotate=0.04*sin(2*PI*t):fillcolor=black@0"
+      ;;
+    feedback)
+      printf '%s\n' "tmix=frames=7:weights='1 1 1 1 1 1 1',eq=contrast=1.35:saturation=1.3"
+      ;;
+    scanwarp)
+      printf '%s\n' "rgbashift=rh=4:bh=-4,noise=alls=12:allf=t+u"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+validate_video_effects() {
+  local effect
+
+  IFS=',' read -r -a video_effects <<< "$video_effect"
+  if [[ ${#video_effects[@]} -eq 0 ]]; then
+    video_effects=(none)
+  fi
+
+  for effect in "${video_effects[@]}"; do
+    if [[ -z "$effect" ]]; then
+      printf 'error: RASTERCAST_VIDEO_EFFECT contains an empty effect name\n' >&2
+      exit 1
+    fi
+    if [[ "$effect" == "none" && ${#video_effects[@]} -gt 1 ]]; then
+      printf 'error: RASTERCAST_VIDEO_EFFECT=none cannot be combined with other effects\n' >&2
+      exit 1
+    fi
+    if ! video_effect_filter "$effect" >/dev/null; then
+      printf 'error: unknown RASTERCAST_VIDEO_EFFECT: %s\n' "$effect" >&2
+      printf 'error: valid effects: none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp\n' >&2
+      exit 1
+    fi
+  done
+}
+
+append_video_effects() {
+  local effect
+  local effect_filter
+
+  for effect in "${video_effects[@]}"; do
+    effect_filter=$(video_effect_filter "$effect")
+    if [[ -n "$effect_filter" ]]; then
+      video_filter="${video_filter},${effect_filter}"
+    fi
+  done
 }
 
 # MiSTer control
@@ -314,7 +388,6 @@ start_server() {
 start_ffmpeg() {
   local audio_filter
   local fit="$video_fit"
-  local effect_filter
   local video_filter
 
   if [[ "$fit" == "auto" ]]; then
@@ -334,48 +407,7 @@ start_ffmpeg() {
       ;;
   esac
 
-  case "$video_effect" in
-    none)
-      effect_filter=""
-      ;;
-    acid)
-      effect_filter="hue=h=2*PI*t:s=2,eq=contrast=1.2:saturation=1.8"
-      ;;
-    trails)
-      effect_filter="tmix=frames=5:weights='1 1 1 1 1'"
-      ;;
-    edges)
-      effect_filter="edgedetect=low=0.1:high=0.4"
-      ;;
-    ghost)
-      effect_filter="lagfun=decay=0.9"
-      ;;
-    matrix)
-      effect_filter="eq=contrast=1.25:saturation=0.65:brightness=-0.03,colorchannelmixer=rr=0.55:rg=0.30:rb=0.05:gr=0.20:gg=0.90:gb=0.20:br=0.02:bg=0.20:bb=0.18"
-      ;;
-    rgbshift)
-      effect_filter="rgbashift=rh=4:bh=-4"
-      ;;
-    negative)
-      effect_filter="negate"
-      ;;
-    warp)
-      effect_filter="lenscorrection=k1=-0.25:k2=0.08:i=bilinear"
-      ;;
-    wobble)
-      effect_filter="rotate=0.04*sin(2*PI*t):fillcolor=black@0"
-      ;;
-    feedback)
-      effect_filter="tmix=frames=7:weights='1 1 1 1 1 1 1',eq=contrast=1.35:saturation=1.3"
-      ;;
-    scanwarp)
-      effect_filter="rgbashift=rh=4:bh=-4,noise=alls=12:allf=t+u"
-      ;;
-  esac
-
-  if [[ -n "$effect_filter" ]]; then
-    video_filter="${video_filter},${effect_filter}"
-  fi
+  append_video_effects
 
   if [[ -n "$output_fps" ]]; then
     video_filter="${video_filter},fps=${output_fps}"
@@ -387,6 +419,7 @@ start_ffmpeg() {
   else
     audio_filter=""
   fi
+  printf 'rastercast: video filter: %s\n' "$video_filter" >&2
 
   case "$audio_effect" in
     none)
