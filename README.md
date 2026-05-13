@@ -134,7 +134,7 @@ Video output:
 - `RASTERCAST_VIDEO_BITRATE` sets the video bitrate, default `1000k`.
 - `RASTERCAST_FPS` optionally forces output FPS, for example `30000/1001`.
 - `RASTERCAST_VIDEO_FIT` sets sizing: `auto`, `contain`, or `cover`; default `auto`.
-- `RASTERCAST_VIDEO_EFFECT` sets an effect preset: `none`, `acid`, `trails`, `edges`, `ghost`, `rgbshift`, or `negative`; default `none`.
+- `RASTERCAST_VIDEO_EFFECT` sets an effect preset: `none`, `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, or `negative`; default `none`.
 
 YouTube and other `yt-dlp` inputs:
 
@@ -169,6 +169,7 @@ RASTERCAST_VIDEO_FIT=cover bin/rastercast.sh "https://www.youtube.com/watch?v=VI
 RASTERCAST_VIDEO_FIT=contain bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_EFFECT=acid bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_EFFECT=trails bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_VIDEO_EFFECT=matrix bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP=1 bin/rastercast.sh "https://example.com/video-page"
 RASTERCAST_YTDLP_FORMAT='best[height<=480]/best' bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP_COOKIES_FROM_BROWSER=firefox bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
@@ -178,7 +179,7 @@ RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github bin/rastercast.sh "https://www.you
 ```
 
 `RASTERCAST_VIDEO_FIT=auto` is the default. It uses letterboxing for local files and direct media URLs, but center-crops `yt-dlp` inputs to fill the 320x240 CRT frame.
-`RASTERCAST_VIDEO_EFFECT` defaults to `none`; available effects are `acid`, `trails`, `edges`, `ghost`, `rgbshift`, and `negative`.
+`RASTERCAST_VIDEO_EFFECT` defaults to `none`; available effects are `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, and `negative`.
 
 Age-restricted YouTube videos require authenticated cookies. Use `RASTERCAST_YTDLP_COOKIES_FROM_BROWSER` with a browser profile that is signed in to YouTube, or export cookies and pass the file with `RASTERCAST_YTDLP_COOKIES`.
 If YouTube signature solving fails, set `RASTERCAST_YTDLP_JS_RUNTIME=node`; newer `yt-dlp` builds may also need `RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github`.
