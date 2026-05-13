@@ -120,6 +120,46 @@ If the PC chooses the wrong address for the printed URL, force it:
 RASTERCAST_HOST_IP=192.168.9.237 bin/rastercast.sh /path/to/video.mkv
 ```
 
+## Options
+
+PC streaming:
+
+- `RASTERCAST_BIND_ADDR` sets the HTTP bind address, default `0.0.0.0`.
+- `RASTERCAST_HOST_IP` sets the host/IP printed in the playback URL; auto-detected by default.
+- `RASTERCAST_PORT` sets the HTTP port, default `8090`.
+- `RASTERCAST_STARTUP_TIMEOUT` sets how long to wait for initial stream data, default `30`.
+
+Video output:
+
+- `RASTERCAST_VIDEO_BITRATE` sets the video bitrate, default `1000k`.
+- `RASTERCAST_FPS` optionally forces output FPS, for example `30000/1001`.
+- `RASTERCAST_VIDEO_FIT` sets sizing: `auto`, `contain`, or `cover`; default `auto`.
+- `RASTERCAST_VIDEO_EFFECT` sets an effect preset: `none`, `acid`, `trails`, `edges`, `ghost`, `rgbshift`, or `negative`; default `none`.
+
+YouTube and other `yt-dlp` inputs:
+
+- `RASTERCAST_YTDLP` controls URL handling: `auto`, `1`, or `0`; default `auto`.
+- `RASTERCAST_YTDLP_FORMAT` sets the requested format, default `best[height<=480]/best`.
+- `RASTERCAST_YTDLP_COOKIES_FROM_BROWSER` passes browser cookies, for example `brave`, `firefox`, or `chrome`.
+- `RASTERCAST_YTDLP_COOKIES` passes an exported cookies file.
+- `RASTERCAST_YTDLP_JS_RUNTIME` enables a JavaScript runtime for extraction, for example `node`.
+- `RASTERCAST_YTDLP_REMOTE_COMPONENTS` allows remote yt-dlp components, for example `ejs:github`.
+
+MiSTer auto-launch:
+
+- `RASTERCAST_MISTER_AUTO` enables automatic SSH launch: `1` or `0`; default `1`.
+- `RASTERCAST_MISTER_HOST` sets the MiSTer host/IP, default `mister`.
+- `RASTERCAST_MISTER_USER` sets the SSH user, default `root`.
+- `RASTERCAST_MISTER_SCRIPT` sets the remote script path, default `/media/fat/Scripts/rastercast.sh`.
+- `RASTERCAST_MISTER_DEPLOY` controls script deployment: `auto`, `always`, or `never`; default `auto`.
+- `RASTERCAST_MISTER_TTY` controls whether playback gets an interactive TTY: `1` or `0`; default `1`.
+
+MiSTer playback:
+
+- `RASTERCAST_MPLAYER_VO` optionally sets the `mplayer` video output, for example `fbdev` or `fbdev2`.
+- `RASTERCAST_CACHE_KB` sets the `mplayer` cache size in KiB, default `8192`.
+- `RASTERCAST_CACHE_MIN` sets the percent cache fill before playback starts, default `10`.
+
 Optional tuning:
 
 ```bash
@@ -127,6 +167,8 @@ RASTERCAST_VIDEO_BITRATE=1000k bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_FPS=30000/1001 bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_VIDEO_FIT=cover bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_FIT=contain bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_VIDEO_EFFECT=acid bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_VIDEO_EFFECT=trails bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP=1 bin/rastercast.sh "https://example.com/video-page"
 RASTERCAST_YTDLP_FORMAT='best[height<=480]/best' bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP_COOKIES_FROM_BROWSER=firefox bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
@@ -136,6 +178,7 @@ RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github bin/rastercast.sh "https://www.you
 ```
 
 `RASTERCAST_VIDEO_FIT=auto` is the default. It uses letterboxing for local files and direct media URLs, but center-crops `yt-dlp` inputs to fill the 320x240 CRT frame.
+`RASTERCAST_VIDEO_EFFECT` defaults to `none`; available effects are `acid`, `trails`, `edges`, `ghost`, `rgbshift`, and `negative`.
 
 Age-restricted YouTube videos require authenticated cookies. Use `RASTERCAST_YTDLP_COOKIES_FROM_BROWSER` with a browser profile that is signed in to YouTube, or export cookies and pass the file with `RASTERCAST_YTDLP_COOKIES`.
 If YouTube signature solving fails, set `RASTERCAST_YTDLP_JS_RUNTIME=node`; newer `yt-dlp` builds may also need `RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github`.

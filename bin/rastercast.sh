@@ -14,6 +14,7 @@ Environment:
   RASTERCAST_FPS         Optional output video FPS override, e.g. 30000/1001
   RASTERCAST_VIDEO_BITRATE  Output video bitrate (default: 1000k)
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
+  RASTERCAST_VIDEO_EFFECT  Video effect: none, acid, trails, edges, ghost, rgbshift, negative
   RASTERCAST_YTDLP       Force yt-dlp for URL input: 1 or 0 (default: auto)
   RASTERCAST_YTDLP_FORMAT  yt-dlp format for URL inputs (default: best[height<=480]/best)
   RASTERCAST_YTDLP_COOKIES  yt-dlp cookies file for authenticated videos
@@ -76,6 +77,7 @@ load_config() {
   output_fps=${RASTERCAST_FPS:-}
   video_bitrate=${RASTERCAST_VIDEO_BITRATE:-1000k}
   video_fit=${RASTERCAST_VIDEO_FIT:-auto}
+  video_effect=${RASTERCAST_VIDEO_EFFECT:-none}
   ytdlp_format=${RASTERCAST_YTDLP_FORMAT:-best[height<=480]/best}
   ytdlp_cookies=${RASTERCAST_YTDLP_COOKIES:-}
   ytdlp_cookies_from_browser=${RASTERCAST_YTDLP_COOKIES_FROM_BROWSER:-}
@@ -137,6 +139,15 @@ validate_config() {
       ;;
     *)
       printf 'error: RASTERCAST_VIDEO_FIT must be auto, contain, or cover\n' >&2
+      exit 1
+      ;;
+  esac
+
+  case "$video_effect" in
+    none | acid | trails | edges | ghost | rgbshift | negative)
+      ;;
+    *)
+      printf 'error: RASTERCAST_VIDEO_EFFECT must be one of: none, acid, trails, edges, ghost, rgbshift, negative\n' >&2
       exit 1
       ;;
   esac
@@ -275,6 +286,7 @@ start_server() {
 
 start_ffmpeg() {
   local fit="$video_fit"
+  local effect_filter
   local video_filter
 
   if [[ "$fit" == "auto" ]]; then
@@ -293,6 +305,34 @@ start_ffmpeg() {
       video_filter="scale=320:240:force_original_aspect_ratio=increase,crop=320:240"
       ;;
   esac
+
+  case "$video_effect" in
+    none)
+      effect_filter=""
+      ;;
+    acid)
+      effect_filter="hue=h=2*PI*t:s=2,eq=contrast=1.2:saturation=1.8"
+      ;;
+    trails)
+      effect_filter="tmix=frames=5:weights='1 1 1 1 1'"
+      ;;
+    edges)
+      effect_filter="edgedetect=low=0.1:high=0.4"
+      ;;
+    ghost)
+      effect_filter="lagfun=decay=0.9"
+      ;;
+    rgbshift)
+      effect_filter="rgbashift=rh=4:bh=-4"
+      ;;
+    negative)
+      effect_filter="negate"
+      ;;
+  esac
+
+  if [[ -n "$effect_filter" ]]; then
+    video_filter="${video_filter},${effect_filter}"
+  fi
 
   if [[ -n "$output_fps" ]]; then
     video_filter="${video_filter},fps=${output_fps}"
