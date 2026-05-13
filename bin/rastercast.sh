@@ -14,7 +14,7 @@ Environment:
   RASTERCAST_FPS         Optional output video FPS override, e.g. 30000/1001
   RASTERCAST_VIDEO_BITRATE  Output video bitrate (default: 1000k)
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
-  RASTERCAST_VIDEO_EFFECT  Video effect: none, acid, trails, edges, ghost, matrix, rgbshift, negative
+  RASTERCAST_VIDEO_EFFECT  Video effect: none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp
   RASTERCAST_YTDLP       Force yt-dlp for URL input: 1 or 0 (default: auto)
   RASTERCAST_YTDLP_FORMAT  yt-dlp format for URL inputs (default: best[height<=480]/best)
   RASTERCAST_YTDLP_COOKIES  yt-dlp cookies file for authenticated videos
@@ -144,10 +144,10 @@ validate_config() {
   esac
 
   case "$video_effect" in
-    none | acid | trails | edges | ghost | matrix | rgbshift | negative)
+    none | acid | trails | edges | ghost | matrix | rgbshift | negative | warp | wobble | feedback | scanwarp)
       ;;
     *)
-      printf 'error: RASTERCAST_VIDEO_EFFECT must be one of: none, acid, trails, edges, ghost, matrix, rgbshift, negative\n' >&2
+      printf 'error: RASTERCAST_VIDEO_EFFECT must be one of: none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp\n' >&2
       exit 1
       ;;
   esac
@@ -330,6 +330,18 @@ start_ffmpeg() {
       ;;
     negative)
       effect_filter="negate"
+      ;;
+    warp)
+      effect_filter="lenscorrection=k1=-0.25:k2=0.08:i=bilinear"
+      ;;
+    wobble)
+      effect_filter="rotate=0.04*sin(2*PI*t):fillcolor=black@0"
+      ;;
+    feedback)
+      effect_filter="tmix=frames=7:weights='1 1 1 1 1 1 1',eq=contrast=1.35:saturation=1.3"
+      ;;
+    scanwarp)
+      effect_filter="rgbashift=rh=4:bh=-4,noise=alls=12:allf=t+u"
       ;;
   esac
 
