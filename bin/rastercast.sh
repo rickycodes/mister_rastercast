@@ -16,6 +16,10 @@ Environment:
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
   RASTERCAST_YTDLP       Force yt-dlp for URL input: 1 or 0 (default: auto)
   RASTERCAST_YTDLP_FORMAT  yt-dlp format for URL inputs (default: best[height<=480]/best)
+  RASTERCAST_YTDLP_COOKIES  yt-dlp cookies file for authenticated videos
+  RASTERCAST_YTDLP_COOKIES_FROM_BROWSER  Browser name for yt-dlp cookies
+  RASTERCAST_YTDLP_JS_RUNTIME  JavaScript runtime for yt-dlp extraction
+  RASTERCAST_YTDLP_REMOTE_COMPONENTS  Remote yt-dlp components, e.g. ejs:github
   RASTERCAST_STARTUP_TIMEOUT  Seconds to wait for stream startup (default: 30)
   RASTERCAST_MISTER_AUTO  Automatically launch playback on MiSTer: 1 or 0 (default: 1)
   RASTERCAST_MISTER_HOST  MiSTer host/IP (default: mister)
@@ -73,6 +77,10 @@ load_config() {
   video_bitrate=${RASTERCAST_VIDEO_BITRATE:-1000k}
   video_fit=${RASTERCAST_VIDEO_FIT:-auto}
   ytdlp_format=${RASTERCAST_YTDLP_FORMAT:-best[height<=480]/best}
+  ytdlp_cookies=${RASTERCAST_YTDLP_COOKIES:-}
+  ytdlp_cookies_from_browser=${RASTERCAST_YTDLP_COOKIES_FROM_BROWSER:-}
+  ytdlp_js_runtime=${RASTERCAST_YTDLP_JS_RUNTIME:-}
+  ytdlp_remote_components=${RASTERCAST_YTDLP_REMOTE_COMPONENTS:-}
   startup_timeout=${RASTERCAST_STARTUP_TIMEOUT:-30}
 
   mister_auto=${RASTERCAST_MISTER_AUTO:-1}
@@ -136,6 +144,10 @@ validate_config() {
   if [[ "$ytdlp_mode" == "1" ]] || { [[ "$ytdlp_mode" == "auto" ]] && is_ytdlp_url "$input"; }; then
     input_uses_ytdlp=1
     require_command yt-dlp
+    if [[ -n "$ytdlp_cookies" && ! -f "$ytdlp_cookies" ]]; then
+      printf 'error: RASTERCAST_YTDLP_COOKIES file not found: %s\n' "$ytdlp_cookies" >&2
+      exit 1
+    fi
   elif ! is_http_url "$input" && [[ ! -f "$input" ]]; then
     printf 'error: input file not found: %s\n' "$input" >&2
     exit 1
@@ -322,9 +334,30 @@ start_ffmpeg() {
   )
 
   if (( input_uses_ytdlp )); then
+    local ytdlp_args=(-f "$ytdlp_format")
+    if [[ -n "$ytdlp_cookies" ]]; then
+      ytdlp_args+=(--cookies "$ytdlp_cookies")
+    fi
+    if [[ -n "$ytdlp_cookies_from_browser" ]]; then
+      ytdlp_args+=(--cookies-from-browser "$ytdlp_cookies_from_browser")
+    fi
+    if [[ -n "$ytdlp_js_runtime" ]]; then
+      ytdlp_args+=(--js-runtimes "$ytdlp_js_runtime")
+    fi
+    if [[ -n "$ytdlp_remote_components" ]]; then
+      ytdlp_args+=(--remote-components "$ytdlp_remote_components")
+    fi
+
     printf 'rastercast: resolving URL input with yt-dlp\n' >&2
+    if ! yt-dlp "${ytdlp_args[@]}" --simulate "$input" >>"${ffmpeg_log}" 2>&1; then
+      touch "$stream_error"
+      printf 'error: yt-dlp failed while resolving URL input\n' >&2
+      show_ffmpeg_log
+      exit 1
+    fi
+
     set +o pipefail
-    yt-dlp -f "$ytdlp_format" -o - "$input" 2>>"${ffmpeg_log}" \
+    yt-dlp "${ytdlp_args[@]}" -o - "$input" 2>>"${ffmpeg_log}" \
       | ffmpeg "${ffmpeg_args[@]}" -i pipe:0 "${ffmpeg_output_args[@]}" >>"${ffmpeg_log}" 2>&1 &
     set -o pipefail
   else
