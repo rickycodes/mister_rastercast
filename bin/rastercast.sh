@@ -15,6 +15,8 @@ Environment:
   RASTERCAST_VIDEO_BITRATE  Output video bitrate (default: 1000k)
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
   RASTERCAST_VIDEO_EFFECT  Video effect: none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp
+  RASTERCAST_VIDEO_SPEED  Playback speed multiplier, from 0.5 to 2.0 (default: 1)
+  RASTERCAST_AUDIO_EFFECT  Audio effect: none, echo, robot, radio, deep, chipmunk
   RASTERCAST_YTDLP       Force yt-dlp for URL input: 1 or 0 (default: auto)
   RASTERCAST_YTDLP_FORMAT  yt-dlp format for URL inputs (default: best[height<=480]/best)
   RASTERCAST_YTDLP_COOKIES  yt-dlp cookies file for authenticated videos
@@ -78,6 +80,8 @@ load_config() {
   video_bitrate=${RASTERCAST_VIDEO_BITRATE:-1000k}
   video_fit=${RASTERCAST_VIDEO_FIT:-auto}
   video_effect=${RASTERCAST_VIDEO_EFFECT:-none}
+  video_speed=${RASTERCAST_VIDEO_SPEED:-1}
+  audio_effect=${RASTERCAST_AUDIO_EFFECT:-none}
   ytdlp_format=${RASTERCAST_YTDLP_FORMAT:-best[height<=480]/best}
   ytdlp_cookies=${RASTERCAST_YTDLP_COOKIES:-}
   ytdlp_cookies_from_browser=${RASTERCAST_YTDLP_COOKIES_FROM_BROWSER:-}
@@ -151,6 +155,20 @@ validate_config() {
       exit 1
       ;;
   esac
+
+  case "$audio_effect" in
+    none | echo | robot | radio | deep | chipmunk)
+      ;;
+    *)
+      printf 'error: RASTERCAST_AUDIO_EFFECT must be one of: none, echo, robot, radio, deep, chipmunk\n' >&2
+      exit 1
+      ;;
+  esac
+
+  if ! awk -v speed="$video_speed" 'BEGIN { exit !(speed + 0 == speed && speed >= 0.5 && speed <= 2.0) }'; then
+    printf 'error: RASTERCAST_VIDEO_SPEED must be a number from 0.5 to 2.0\n' >&2
+    exit 1
+  fi
 
   if [[ "$ytdlp_mode" == "1" ]] || { [[ "$ytdlp_mode" == "auto" ]] && is_ytdlp_url "$input"; }; then
     input_uses_ytdlp=1
@@ -285,6 +303,7 @@ start_server() {
 }
 
 start_ffmpeg() {
+  local audio_filter
   local fit="$video_fit"
   local effect_filter
   local video_filter
@@ -353,6 +372,33 @@ start_ffmpeg() {
     video_filter="${video_filter},fps=${output_fps}"
   fi
 
+  if [[ "$video_speed" != "1" && "$video_speed" != "1.0" ]]; then
+    video_filter="${video_filter},setpts=PTS/${video_speed}"
+    audio_filter="atempo=${video_speed}"
+  else
+    audio_filter=""
+  fi
+
+  case "$audio_effect" in
+    none)
+      ;;
+    echo)
+      audio_filter="${audio_filter:+${audio_filter},}aecho=0.8:0.88:60:0.35"
+      ;;
+    robot)
+      audio_filter="${audio_filter:+${audio_filter},}afftfilt=real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)',aresample=44100"
+      ;;
+    radio)
+      audio_filter="${audio_filter:+${audio_filter},}highpass=f=300,lowpass=f=3000,acompressor=threshold=-18dB:ratio=4:attack=5:release=80"
+      ;;
+    deep)
+      audio_filter="${audio_filter:+${audio_filter},}asetrate=44100*0.85,aresample=44100,atempo=1.17647"
+      ;;
+    chipmunk)
+      audio_filter="${audio_filter:+${audio_filter},}asetrate=44100*1.25,aresample=44100,atempo=0.8"
+      ;;
+  esac
+
   local ffmpeg_args=(
     -hide_banner
     -loglevel error
@@ -387,6 +433,9 @@ start_ffmpeg() {
     -f mpegts
     "$stream_path"
   )
+  if [[ -n "$audio_filter" ]]; then
+    ffmpeg_output_args=(-af "$audio_filter" "${ffmpeg_output_args[@]}")
+  fi
 
   if (( input_uses_ytdlp )); then
     local ytdlp_args=(-f "$ytdlp_format")
