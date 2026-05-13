@@ -132,6 +132,7 @@ PC streaming:
 Video output:
 
 - `RASTERCAST_VIDEO_BITRATE` sets the video bitrate, default `1000k`.
+- `RASTERCAST_VIDEO_SIZE` sets the PC transcode size as `WIDTHxHEIGHT`, default `320x240`.
 - `RASTERCAST_FPS` optionally forces output FPS, for example `30000/1001`.
 - `RASTERCAST_VIDEO_FIT` sets sizing: `auto`, `contain`, or `cover`; default `auto`.
 - `RASTERCAST_VIDEO_EFFECT` sets an effect preset: `none`, `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, or `scanwarp`; default `none`.
@@ -166,6 +167,7 @@ Optional tuning:
 
 ```bash
 RASTERCAST_VIDEO_BITRATE=1000k bin/rastercast.sh /path/to/video.mkv
+RASTERCAST_VIDEO_SIZE=640x480 RASTERCAST_VIDEO_BITRATE=2500k bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_FPS=30000/1001 bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_VIDEO_FIT=cover bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_FIT=contain bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
@@ -186,6 +188,7 @@ RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github bin/rastercast.sh "https://www.you
 ```
 
 `RASTERCAST_VIDEO_FIT=auto` is the default. It uses letterboxing for local files and direct media URLs, but center-crops `yt-dlp` inputs to fill the 320x240 CRT frame.
+`RASTERCAST_VIDEO_SIZE` only changes the PC-side stream size. MiSTer video mode and BVM support still need to match the resolution you choose.
 `RASTERCAST_VIDEO_EFFECT` defaults to `none`; available effects are `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, and `scanwarp`.
 `RASTERCAST_VIDEO_SPEED` changes video and audio speed together. `RASTERCAST_AUDIO_EFFECT` can add `echo`, `robot`, `radio`, `deep`, or `chipmunk` processing.
 

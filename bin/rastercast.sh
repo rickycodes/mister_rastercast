@@ -13,6 +13,7 @@ Environment:
   RASTERCAST_PORT        HTTP port (default: 8090)
   RASTERCAST_FPS         Optional output video FPS override, e.g. 30000/1001
   RASTERCAST_VIDEO_BITRATE  Output video bitrate (default: 1000k)
+  RASTERCAST_VIDEO_SIZE  Output video size as WIDTHxHEIGHT (default: 320x240)
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
   RASTERCAST_VIDEO_EFFECT  Video effect: none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp
   RASTERCAST_VIDEO_SPEED  Playback speed multiplier, from 0.5 to 2.0 (default: 1)
@@ -78,6 +79,7 @@ load_config() {
   port=${RASTERCAST_PORT:-8090}
   output_fps=${RASTERCAST_FPS:-}
   video_bitrate=${RASTERCAST_VIDEO_BITRATE:-1000k}
+  video_size=${RASTERCAST_VIDEO_SIZE:-320x240}
   video_fit=${RASTERCAST_VIDEO_FIT:-auto}
   video_effect=${RASTERCAST_VIDEO_EFFECT:-none}
   video_speed=${RASTERCAST_VIDEO_SPEED:-1}
@@ -146,6 +148,13 @@ validate_config() {
       exit 1
       ;;
   esac
+
+  if [[ ! "$video_size" =~ ^[1-9][0-9]*x[1-9][0-9]*$ ]]; then
+    printf 'error: RASTERCAST_VIDEO_SIZE must be WIDTHxHEIGHT, e.g. 320x240\n' >&2
+    exit 1
+  fi
+  video_width=${video_size%x*}
+  video_height=${video_size#*x}
 
   case "$video_effect" in
     none | acid | trails | edges | ghost | matrix | rgbshift | negative | warp | wobble | feedback | scanwarp)
@@ -318,10 +327,10 @@ start_ffmpeg() {
 
   case "$fit" in
     contain)
-      video_filter="scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2:black"
+      video_filter="scale=${video_width}:${video_height}:force_original_aspect_ratio=decrease,pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2:black"
       ;;
     cover)
-      video_filter="scale=320:240:force_original_aspect_ratio=increase,crop=320:240"
+      video_filter="scale=${video_width}:${video_height}:force_original_aspect_ratio=increase,crop=${video_width}:${video_height}"
       ;;
   esac
 

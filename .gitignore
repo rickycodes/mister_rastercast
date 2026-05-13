@@ -1,4 +1,5 @@
 .rastercast/
+bin/__pycache__/
 *.ts
 *.tmp
 *.log
