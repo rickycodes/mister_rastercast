@@ -63,10 +63,29 @@ Serve a local video from the PC and launch playback on MiSTer:
 bin/rastercast.sh /path/to/video.mkv
 ```
 
+Queue multiple videos for back-to-back playback:
+
+```bash
+bin/rastercast.sh /path/to/one.mkv /path/to/two.mkv /path/to/three.mkv
+```
+
 Or stream a YouTube URL through `yt-dlp`:
 
 ```bash
 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+```
+
+Queue multiple YouTube URLs:
+
+```bash
+bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID_1" "https://www.youtube.com/watch?v=VIDEO_ID_2"
+```
+
+Or expand a YouTube playlist URL:
+
+```bash
+RASTERCAST_YTDLP_PLAYLIST=1 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
+RASTERCAST_YTDLP_PLAYLIST=1 RASTERCAST_YTDLP_PLAYLIST_ITEMS=1:5 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
 ```
 
 Direct HTTP(S) media URLs are passed to `ffmpeg` without `yt-dlp`:
@@ -133,6 +152,7 @@ Video output:
 
 - `RASTERCAST_VIDEO_BITRATE` sets the video bitrate, default `1000k`.
 - `RASTERCAST_VIDEO_SIZE` sets the PC transcode size as `WIDTHxHEIGHT`, default `320x240`.
+- `RASTERCAST_DISPLAY_ASPECT` sets the intended display shape, for example `4:3`; default `auto`.
 - `RASTERCAST_FPS` optionally forces output FPS, for example `30000/1001`.
 - `RASTERCAST_VIDEO_FIT` sets sizing: `auto`, `contain`, or `cover`; default `auto`.
 - `RASTERCAST_VIDEO_EFFECT` sets comma-separated effect presets: `none`, `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, or `scanwarp`; default `none`.
@@ -147,6 +167,8 @@ YouTube and other `yt-dlp` inputs:
 - `RASTERCAST_YTDLP_COOKIES` passes an exported cookies file.
 - `RASTERCAST_YTDLP_JS_RUNTIME` enables a JavaScript runtime for extraction, for example `node`.
 - `RASTERCAST_YTDLP_REMOTE_COMPONENTS` allows remote yt-dlp components, for example `ejs:github`.
+- `RASTERCAST_YTDLP_PLAYLIST` expands yt-dlp playlist URLs when set to `1`, default `0`.
+- `RASTERCAST_YTDLP_PLAYLIST_ITEMS` limits playlist expansion, for example `1:10`.
 
 MiSTer auto-launch:
 
@@ -168,6 +190,7 @@ Optional tuning:
 ```bash
 RASTERCAST_VIDEO_BITRATE=1000k bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_VIDEO_SIZE=640x480 RASTERCAST_VIDEO_BITRATE=2500k bin/rastercast.sh /path/to/video.mkv
+RASTERCAST_VIDEO_SIZE=512x240 RASTERCAST_DISPLAY_ASPECT=4:3 bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_FPS=30000/1001 bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_VIDEO_FIT=cover bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_FIT=contain bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
@@ -186,15 +209,18 @@ RASTERCAST_YTDLP_COOKIES_FROM_BROWSER=firefox bin/rastercast.sh "https://www.you
 RASTERCAST_YTDLP_COOKIES=/path/to/cookies.txt bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP_JS_RUNTIME=node bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_YTDLP_PLAYLIST=1 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
+RASTERCAST_YTDLP_PLAYLIST=1 RASTERCAST_YTDLP_PLAYLIST_ITEMS=1:5 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
 ```
 
 `RASTERCAST_VIDEO_FIT=auto` is the default. It uses letterboxing for local files and direct media URLs, but center-crops `yt-dlp` inputs to fill the 320x240 CRT frame.
-`RASTERCAST_VIDEO_SIZE` only changes the PC-side stream size. MiSTer video mode and BVM support still need to match the resolution you choose.
+`RASTERCAST_VIDEO_SIZE` changes the PC-side stream size. MiSTer video mode and BVM support still need to match the resolution you choose. `RASTERCAST_DISPLAY_ASPECT=4:3` can correct geometry when a wide 240p mode like `512x240` is displayed as a 4:3 raster.
 `RASTERCAST_VIDEO_EFFECT` defaults to `none`; available effects are `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, and `scanwarp`. Multiple effects can be layered with commas; order matters.
 `RASTERCAST_VIDEO_SPEED` changes video and audio speed together. `RASTERCAST_AUDIO_EFFECT` can add `echo`, `robot`, `radio`, `deep`, or `chipmunk` processing.
 
 Age-restricted YouTube videos require authenticated cookies. Use `RASTERCAST_YTDLP_COOKIES_FROM_BROWSER` with a browser profile that is signed in to YouTube, or export cookies and pass the file with `RASTERCAST_YTDLP_COOKIES`.
 If YouTube signature solving fails, set `RASTERCAST_YTDLP_JS_RUNTIME=node`; newer `yt-dlp` builds may also need `RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github`.
+Queued YouTube playback resolves media URLs before starting ffmpeg and expects one muxed media URL per video. If yt-dlp returns separate video and audio URLs, use a muxed format such as `RASTERCAST_YTDLP_FORMAT='best[height<=480][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]'`.
 
 If MiSTer reports `Cache empty`, increase the player cache or reduce bitrate:
 

@@ -5,7 +5,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: rastercast.sh <video-file-or-url>
+Usage: rastercast.sh <video-file-or-url>...
 
 Environment:
   RASTERCAST_BIND_ADDR   HTTP bind address (default: 0.0.0.0)
@@ -14,6 +14,7 @@ Environment:
   RASTERCAST_FPS         Optional output video FPS override, e.g. 30000/1001
   RASTERCAST_VIDEO_BITRATE  Output video bitrate (default: 1000k)
   RASTERCAST_VIDEO_SIZE  Output video size as WIDTHxHEIGHT (default: 320x240)
+  RASTERCAST_DISPLAY_ASPECT  Display aspect ratio, e.g. 4:3 (default: auto)
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
   RASTERCAST_VIDEO_EFFECT  Comma-separated video effects, or none
   RASTERCAST_VIDEO_SPEED  Playback speed multiplier, from 0.5 to 2.0 (default: 1)
@@ -24,6 +25,8 @@ Environment:
   RASTERCAST_YTDLP_COOKIES_FROM_BROWSER  Browser name for yt-dlp cookies
   RASTERCAST_YTDLP_JS_RUNTIME  JavaScript runtime for yt-dlp extraction
   RASTERCAST_YTDLP_REMOTE_COMPONENTS  Remote yt-dlp components, e.g. ejs:github
+  RASTERCAST_YTDLP_PLAYLIST  Expand yt-dlp playlist URLs: 1 or 0 (default: 0)
+  RASTERCAST_YTDLP_PLAYLIST_ITEMS  yt-dlp playlist items/range, e.g. 1:10
   RASTERCAST_STARTUP_TIMEOUT  Seconds to wait for stream startup (default: 30)
   RASTERCAST_MISTER_AUTO  Automatically launch playback on MiSTer: 1 or 0 (default: 1)
   RASTERCAST_MISTER_HOST  MiSTer host/IP (default: mister)
@@ -71,7 +74,7 @@ load_config() {
   script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
   repo_dir=$(cd -- "${script_dir}/.." && pwd)
 
-  input=$1
+  inputs=("$@")
   input_uses_ytdlp=0
   ytdlp_mode=${RASTERCAST_YTDLP:-auto}
 
@@ -80,6 +83,7 @@ load_config() {
   output_fps=${RASTERCAST_FPS:-}
   video_bitrate=${RASTERCAST_VIDEO_BITRATE:-1000k}
   video_size=${RASTERCAST_VIDEO_SIZE:-320x240}
+  display_aspect=${RASTERCAST_DISPLAY_ASPECT:-auto}
   video_fit=${RASTERCAST_VIDEO_FIT:-auto}
   video_effect=${RASTERCAST_VIDEO_EFFECT:-none}
   video_speed=${RASTERCAST_VIDEO_SPEED:-1}
@@ -89,6 +93,8 @@ load_config() {
   ytdlp_cookies_from_browser=${RASTERCAST_YTDLP_COOKIES_FROM_BROWSER:-}
   ytdlp_js_runtime=${RASTERCAST_YTDLP_JS_RUNTIME:-}
   ytdlp_remote_components=${RASTERCAST_YTDLP_REMOTE_COMPONENTS:-}
+  ytdlp_playlist=${RASTERCAST_YTDLP_PLAYLIST:-0}
+  ytdlp_playlist_items=${RASTERCAST_YTDLP_PLAYLIST_ITEMS:-}
   startup_timeout=${RASTERCAST_STARTUP_TIMEOUT:-30}
 
   mister_auto=${RASTERCAST_MISTER_AUTO:-1}
@@ -140,6 +146,19 @@ validate_config() {
       ;;
   esac
 
+  case "$ytdlp_playlist" in
+    1 | yes | true | 0 | no | false)
+      ;;
+    *)
+      printf 'error: RASTERCAST_YTDLP_PLAYLIST must be 1 or 0\n' >&2
+      exit 1
+      ;;
+  esac
+  if [[ -n "$ytdlp_playlist_items" && "$ytdlp_playlist" != "1" && "$ytdlp_playlist" != "yes" && "$ytdlp_playlist" != "true" ]]; then
+    printf 'error: RASTERCAST_YTDLP_PLAYLIST_ITEMS requires RASTERCAST_YTDLP_PLAYLIST=1\n' >&2
+    exit 1
+  fi
+
   case "$video_fit" in
     auto | contain | cover)
       ;;
@@ -155,6 +174,25 @@ validate_config() {
   fi
   video_width=${video_size%x*}
   video_height=${video_size#*x}
+
+  if [[ "$display_aspect" == "auto" ]]; then
+    display_width=$video_width
+    display_height=$video_height
+  elif [[ "$display_aspect" =~ ^[1-9][0-9]*:[1-9][0-9]*$ ]]; then
+    display_width=${display_aspect%:*}
+    display_height=${display_aspect#*:}
+  else
+    printf 'error: RASTERCAST_DISPLAY_ASPECT must be auto or WIDTH:HEIGHT, e.g. 4:3\n' >&2
+    exit 1
+  fi
+  fit_width=$((video_height * display_width / display_height))
+  fit_height=$video_height
+  if (( fit_width > video_width )); then
+    fit_width=$video_width
+    fit_height=$((video_width * display_height / display_width))
+  fi
+  fit_width=$((fit_width / 2 * 2))
+  fit_height=$((fit_height / 2 * 2))
 
   validate_video_effects
 
@@ -172,17 +210,24 @@ validate_config() {
     exit 1
   fi
 
-  if [[ "$ytdlp_mode" == "1" ]] || { [[ "$ytdlp_mode" == "auto" ]] && is_ytdlp_url "$input"; }; then
-    input_uses_ytdlp=1
-    require_command yt-dlp
-    if [[ -n "$ytdlp_cookies" && ! -f "$ytdlp_cookies" ]]; then
-      printf 'error: RASTERCAST_YTDLP_COOKIES file not found: %s\n' "$ytdlp_cookies" >&2
+  local item
+  for item in "${inputs[@]}"; do
+    if should_use_ytdlp "$item"; then
+      input_uses_ytdlp=1
+      require_command yt-dlp
+      if [[ -n "$ytdlp_cookies" && ! -f "$ytdlp_cookies" ]]; then
+        printf 'error: RASTERCAST_YTDLP_COOKIES file not found: %s\n' "$ytdlp_cookies" >&2
+        exit 1
+      fi
+    elif ! is_http_url "$item" && [[ ! -f "$item" ]]; then
+      printf 'error: input file not found: %s\n' "$item" >&2
       exit 1
     fi
-  elif ! is_http_url "$input" && [[ ! -f "$input" ]]; then
-    printf 'error: input file not found: %s\n' "$input" >&2
-    exit 1
-  fi
+  done
+}
+
+should_use_ytdlp() {
+  [[ "$ytdlp_mode" == "1" ]] || { [[ "$ytdlp_mode" == "auto" ]] && is_ytdlp_url "$1"; }
 }
 
 video_effect_filter() {
@@ -263,6 +308,120 @@ append_video_effects() {
     if [[ -n "$effect_filter" ]]; then
       video_filter="${video_filter},${effect_filter}"
     fi
+  done
+}
+
+build_ytdlp_args() {
+  ytdlp_args=(-f "$ytdlp_format")
+  if [[ -n "$ytdlp_cookies" ]]; then
+    ytdlp_args+=(--cookies "$ytdlp_cookies")
+  fi
+  if [[ -n "$ytdlp_cookies_from_browser" ]]; then
+    ytdlp_args+=(--cookies-from-browser "$ytdlp_cookies_from_browser")
+  fi
+  if [[ -n "$ytdlp_js_runtime" ]]; then
+    ytdlp_args+=(--js-runtimes "$ytdlp_js_runtime")
+  fi
+  if [[ -n "$ytdlp_remote_components" ]]; then
+    ytdlp_args+=(--remote-components "$ytdlp_remote_components")
+  fi
+}
+
+expand_playlist_input() {
+  local item=$1
+
+  if ! should_use_ytdlp "$item"; then
+    printf '%s\n' "$item"
+    return
+  fi
+
+  case "$ytdlp_playlist" in
+    1 | yes | true)
+      printf 'rastercast: expanding playlist with yt-dlp: %s\n' "$item" >&2
+      local playlist_args=(--flat-playlist --print webpage_url)
+      if [[ -n "$ytdlp_playlist_items" ]]; then
+        playlist_args+=(--playlist-items "$ytdlp_playlist_items")
+      fi
+      yt-dlp "${ytdlp_args[@]}" "${playlist_args[@]}" "$item" 2>>"${ffmpeg_log}"
+      ;;
+    *)
+      printf '%s\n' "$item"
+      ;;
+  esac
+}
+
+resolve_queue_item() {
+  local item=$1
+  local urls
+  local url_count
+
+  if ! should_use_ytdlp "$item"; then
+    if ! is_http_url "$item"; then
+      item=$(cd -- "$(dirname -- "$item")" && printf '%s/%s\n' "$PWD" "$(basename -- "$item")")
+    fi
+    printf '%s\n' "$item"
+    return
+  fi
+
+  printf 'rastercast: resolving URL input with yt-dlp: %s\n' "$item" >&2
+  if ! yt-dlp "${ytdlp_args[@]}" --simulate "$item" >>"${ffmpeg_log}" 2>&1; then
+    touch "$stream_error"
+    printf 'error: yt-dlp failed while resolving URL input\n' >&2
+    show_ffmpeg_log
+    exit 1
+  fi
+
+  if ! urls=$(yt-dlp "${ytdlp_args[@]}" --get-url "$item" 2>>"${ffmpeg_log}"); then
+    touch "$stream_error"
+    printf 'error: yt-dlp failed while getting media URL\n' >&2
+    show_ffmpeg_log
+    exit 1
+  fi
+
+  url_count=$(printf '%s\n' "$urls" | sed '/^$/d' | wc -l)
+  if [[ "$url_count" != "1" ]]; then
+    touch "$stream_error"
+    printf 'error: yt-dlp returned %s media URLs for one queue item\n' "$url_count" >&2
+    printf 'error: use a muxed format, e.g. RASTERCAST_YTDLP_FORMAT='\''best[height<=480][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]'\''\n' >&2
+    show_ffmpeg_log
+    exit 1
+  fi
+
+  printf '%s\n' "$urls"
+}
+
+concat_escape() {
+  local value=${1//\'/\'\\\'\'}
+  printf "file '%s'\n" "$value"
+}
+
+write_concat_list() {
+  local expanded_items=()
+  local item
+  local resolved
+
+  concat_list="${workdir}/queue.ffconcat"
+  : > "$concat_list"
+
+  build_ytdlp_args
+  for item in "${inputs[@]}"; do
+    while IFS= read -r expanded; do
+      [[ -n "$expanded" ]] && expanded_items+=("$expanded")
+    done < <(expand_playlist_input "$item")
+  done
+
+  if [[ ${#expanded_items[@]} -eq 0 ]]; then
+    printf 'error: queue is empty\n' >&2
+    exit 1
+  fi
+
+  printf 'rastercast: queue has %s item(s)\n' "${#expanded_items[@]}" >&2
+  local index=0
+  for item in "${expanded_items[@]}"; do
+    index=$((index + 1))
+    printf 'rastercast: preparing queue item %s/%s\n' "$index" "${#expanded_items[@]}" >&2
+    resolved=$(resolve_queue_item "$item")
+    concat_escape "$resolved" >> "$concat_list"
   done
 }
 
@@ -400,10 +559,10 @@ start_ffmpeg() {
 
   case "$fit" in
     contain)
-      video_filter="scale=${video_width}:${video_height}:force_original_aspect_ratio=decrease,pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2:black"
+      video_filter="scale=${fit_width}:${fit_height}:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2:black"
       ;;
     cover)
-      video_filter="scale=${video_width}:${video_height}:force_original_aspect_ratio=increase,crop=${video_width}:${video_height}"
+      video_filter="scale=${fit_width}:${fit_height}:force_original_aspect_ratio=increase:force_divisible_by=2,setsar=1,crop=${fit_width}:${fit_height},pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2:black"
       ;;
   esac
 
@@ -419,7 +578,6 @@ start_ffmpeg() {
   else
     audio_filter=""
   fi
-  printf 'rastercast: video filter: %s\n' "$video_filter" >&2
 
   case "$audio_effect" in
     none)
@@ -479,37 +637,13 @@ start_ffmpeg() {
     ffmpeg_output_args=(-af "$audio_filter" "${ffmpeg_output_args[@]}")
   fi
 
-  if (( input_uses_ytdlp )); then
-    local ytdlp_args=(-f "$ytdlp_format")
-    if [[ -n "$ytdlp_cookies" ]]; then
-      ytdlp_args+=(--cookies "$ytdlp_cookies")
-    fi
-    if [[ -n "$ytdlp_cookies_from_browser" ]]; then
-      ytdlp_args+=(--cookies-from-browser "$ytdlp_cookies_from_browser")
-    fi
-    if [[ -n "$ytdlp_js_runtime" ]]; then
-      ytdlp_args+=(--js-runtimes "$ytdlp_js_runtime")
-    fi
-    if [[ -n "$ytdlp_remote_components" ]]; then
-      ytdlp_args+=(--remote-components "$ytdlp_remote_components")
-    fi
-
-    printf 'rastercast: resolving URL input with yt-dlp\n' >&2
-    if ! yt-dlp "${ytdlp_args[@]}" --simulate "$input" >>"${ffmpeg_log}" 2>&1; then
-      touch "$stream_error"
-      printf 'error: yt-dlp failed while resolving URL input\n' >&2
-      show_ffmpeg_log
-      exit 1
-    fi
-
-    set +o pipefail
-    yt-dlp "${ytdlp_args[@]}" -o - "$input" 2>>"${ffmpeg_log}" \
-      | ffmpeg "${ffmpeg_args[@]}" -i pipe:0 "${ffmpeg_output_args[@]}" >>"${ffmpeg_log}" 2>&1 &
-    set -o pipefail
-  else
-    ffmpeg "${ffmpeg_args[@]}" -i "$input" "${ffmpeg_output_args[@]}" \
-      >"${ffmpeg_log}" 2>&1 &
-  fi
+  write_concat_list
+  ffmpeg "${ffmpeg_args[@]}" \
+    -f concat \
+    -safe 0 \
+    -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+    -i "$concat_list" \
+    "${ffmpeg_output_args[@]}" >"${ffmpeg_log}" 2>&1 &
   ffmpeg_pid=$!
 }
 
@@ -572,7 +706,7 @@ main() {
     exit 0
   fi
 
-  load_config "$1"
+  load_config "$@"
   validate_config
   resolve_host_ip
   prepare_workdir
