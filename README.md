@@ -186,7 +186,7 @@ Video output:
 - `RASTERCAST_VIDEO_FIT` sets sizing: `auto`, `contain`, or `cover`; default `auto`.
 - `RASTERCAST_VIDEO_EFFECT` sets comma-separated effect presets: `none`, `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, or `scanwarp`; default `none`.
 - `RASTERCAST_VIDEO_SPEED` sets playback speed from `0.5` to `2.0`, default `1`.
-- `RASTERCAST_VISUALIZER` replaces source video with an audio visualizer: `none`, `waves`, `spectrum`, `cqt`, or `vectorscope`; default `none`.
+- `RASTERCAST_VISUALIZER` replaces source video with an audio visualizer: `none`, `waves`, `spectrum`, `cqt`, `vectorscope`, `freqs`, `spatial`, `histogram`, or `bits`; default `none`.
 - `RASTERCAST_AUDIO_EFFECT` sets an audio effect preset: `none`, `echo`, `robot`, `radio`, `deep`, or `chipmunk`; default `none`.
 
 YouTube and other `yt-dlp` inputs:
@@ -233,6 +233,8 @@ RASTERCAST_VIDEO_EFFECT=matrix,scanwarp,trails bin/rastercast.sh "https://www.yo
 RASTERCAST_VIDEO_SPEED=0.75 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=spectrum bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=vectorscope bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_VISUALIZER=spatial bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_VISUALIZER=bits bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_AUDIO_EFFECT=echo bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_AUDIO_EFFECT=radio bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP=1 bin/rastercast.sh "https://example.com/video-page"

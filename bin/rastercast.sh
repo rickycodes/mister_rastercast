@@ -21,7 +21,7 @@ Environment:
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
   RASTERCAST_VIDEO_EFFECT  Comma-separated video effects, or none
   RASTERCAST_VIDEO_SPEED  Playback speed multiplier, from 0.5 to 2.0 (default: 1)
-  RASTERCAST_VISUALIZER  Replace video with audio visualizer: none, waves, spectrum, cqt, vectorscope
+  RASTERCAST_VISUALIZER  Replace video with audio visualizer: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits
   RASTERCAST_AUDIO_EFFECT  Audio effect: none, echo, robot, radio, deep, chipmunk
   RASTERCAST_YTDLP       Force yt-dlp for URL input: 1 or 0 (default: auto)
   RASTERCAST_YTDLP_FORMAT  yt-dlp format for URL inputs (default: progressive <=480p)
@@ -216,10 +216,10 @@ validate_config() {
   validate_video_effects
 
   case "$visualizer" in
-    none | waves | spectrum | cqt | vectorscope)
+    none | waves | spectrum | cqt | vectorscope | freqs | spatial | histogram | bits)
       ;;
     *)
-      printf 'error: RASTERCAST_VISUALIZER must be one of: none, waves, spectrum, cqt, vectorscope\n' >&2
+      printf 'error: RASTERCAST_VISUALIZER must be one of: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits\n' >&2
       exit 1
       ;;
   esac
@@ -411,6 +411,18 @@ visualizer_filter() {
       ;;
     vectorscope)
       printf 'avectorscope=s=%sx%s:mode=lissajous:zoom=1.3,format=yuv420p' "$fit_width" "$fit_height"
+      ;;
+    freqs)
+      printf 'showfreqs=s=%sx%s:mode=bar:ascale=cbrt:fscale=log:colors=00ff66|00ccff' "$fit_width" "$fit_height"
+      ;;
+    spatial)
+      printf 'showspatial=s=%sx%s:win_size=4096:overlap=0.75' "$fit_width" "$fit_height"
+      ;;
+    histogram)
+      printf 'ahistogram=s=%sx%s:scale=cbrt:ascale=log:slide=scroll' "$fit_width" "$fit_height"
+      ;;
+    bits)
+      printf 'abitscope=s=%sx%s:colors=00ff66|00ccff|ff00cc' "$fit_width" "$fit_height"
       ;;
   esac
 }
