@@ -24,7 +24,7 @@ Environment:
   RASTERCAST_VISUALIZER  Replace video with audio visualizer: none, waves, spectrum, cqt, vectorscope
   RASTERCAST_AUDIO_EFFECT  Audio effect: none, echo, robot, radio, deep, chipmunk
   RASTERCAST_YTDLP       Force yt-dlp for URL input: 1 or 0 (default: auto)
-  RASTERCAST_YTDLP_FORMAT  yt-dlp format for URL inputs (default: best[height<=480]/best)
+  RASTERCAST_YTDLP_FORMAT  yt-dlp format for URL inputs (default: progressive <=480p)
   RASTERCAST_YTDLP_COOKIES  yt-dlp cookies file for authenticated videos
   RASTERCAST_YTDLP_COOKIES_FROM_BROWSER  Browser name for yt-dlp cookies
   RASTERCAST_YTDLP_JS_RUNTIME  JavaScript runtime for yt-dlp extraction
@@ -118,7 +118,7 @@ load_config() {
   video_speed=${RASTERCAST_VIDEO_SPEED:-1}
   visualizer=${RASTERCAST_VISUALIZER:-none}
   audio_effect=${RASTERCAST_AUDIO_EFFECT:-none}
-  ytdlp_format=${RASTERCAST_YTDLP_FORMAT:-best[height<=480]/best}
+  ytdlp_format=${RASTERCAST_YTDLP_FORMAT:-best[height<=480][protocol^=http][vcodec!=none][acodec!=none]/best[protocol^=http][vcodec!=none][acodec!=none]/best[height<=480][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]}
   ytdlp_cookies=${RASTERCAST_YTDLP_COOKIES:-}
   ytdlp_cookies_from_browser=${RASTERCAST_YTDLP_COOKIES_FROM_BROWSER:-}
   ytdlp_js_runtime=${RASTERCAST_YTDLP_JS_RUNTIME:-}
@@ -544,7 +544,13 @@ resolve_queue_item() {
   url_count=$(printf '%s\n' "$urls" | sed '/^$/d' | wc -l)
   if [[ "$url_count" != "1" ]]; then
     printf 'warning: yt-dlp returned %s media URLs for queue item: %s\n' "$url_count" "$item" >&2
-    printf 'error: use a muxed format, e.g. RASTERCAST_YTDLP_FORMAT='\''best[height<=480][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]'\''\n' >&2
+    printf 'error: use a muxed progressive format, e.g. RASTERCAST_YTDLP_FORMAT='\''best[height<=480][protocol^=http][vcodec!=none][acodec!=none]/best[protocol^=http][vcodec!=none][acodec!=none]'\''\n' >&2
+    return 1
+  fi
+
+  if [[ "$urls" == *".m3u8"* || "$urls" == *"/manifest/hls_playlist/"* ]]; then
+    printf 'warning: yt-dlp returned an HLS URL for queue item: %s\n' "$item" >&2
+    printf 'error: queued YouTube playback needs a progressive muxed URL; try RASTERCAST_YTDLP_FORMAT='\''best[height<=480][protocol^=http][vcodec!=none][acodec!=none]/best[protocol^=http][vcodec!=none][acodec!=none]'\''\n' >&2
     return 1
   fi
 

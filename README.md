@@ -192,7 +192,7 @@ Video output:
 YouTube and other `yt-dlp` inputs:
 
 - `RASTERCAST_YTDLP` controls URL handling: `auto`, `1`, or `0`; default `auto`.
-- `RASTERCAST_YTDLP_FORMAT` sets the requested format, default `best[height<=480]/best`.
+- `RASTERCAST_YTDLP_FORMAT` sets the requested format; by default rastercast prefers progressive muxed HTTP video at 480p or lower.
 - `RASTERCAST_YTDLP_COOKIES_FROM_BROWSER` passes browser cookies, for example `brave`, `firefox`, or `chrome`.
 - `RASTERCAST_YTDLP_COOKIES` passes an exported cookies file.
 - `RASTERCAST_YTDLP_JS_RUNTIME` enables a JavaScript runtime for extraction, for example `node`.
@@ -236,7 +236,7 @@ RASTERCAST_VISUALIZER=vectorscope bin/rastercast.sh "https://www.youtube.com/wat
 RASTERCAST_AUDIO_EFFECT=echo bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_AUDIO_EFFECT=radio bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP=1 bin/rastercast.sh "https://example.com/video-page"
-RASTERCAST_YTDLP_FORMAT='best[height<=480]/best' bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_YTDLP_FORMAT='best[height<=480][protocol^=http][vcodec!=none][acodec!=none]/best[protocol^=http][vcodec!=none][acodec!=none]' bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP_COOKIES_FROM_BROWSER=firefox bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP_COOKIES=/path/to/cookies.txt bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP_JS_RUNTIME=node bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
@@ -254,7 +254,7 @@ RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1 bin/rastercast.sh "https://www.youtube.com/p
 
 Age-restricted YouTube videos require authenticated cookies. Use `RASTERCAST_YTDLP_COOKIES_FROM_BROWSER` with a browser profile that is signed in to YouTube, or export cookies and pass the file with `RASTERCAST_YTDLP_COOKIES`.
 If YouTube signature solving fails, set `RASTERCAST_YTDLP_JS_RUNTIME=node`; newer `yt-dlp` builds may also need `RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github`.
-Queued YouTube playback resolves media URLs before starting ffmpeg and expects one muxed media URL per video. If yt-dlp returns separate video and audio URLs, use a muxed format such as `RASTERCAST_YTDLP_FORMAT='best[height<=480][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]'`. Use `RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1` to skip private or deleted queue entries.
+Queued YouTube playback resolves media URLs before starting ffmpeg and expects one progressive muxed media URL per video. HLS manifests and separate video/audio URLs are rejected because they are unreliable inside ffmpeg's concat demuxer. If needed, force a muxed progressive format with `RASTERCAST_YTDLP_FORMAT='best[height<=480][protocol^=http][vcodec!=none][acodec!=none]/best[protocol^=http][vcodec!=none][acodec!=none]'`. Use `RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1` to skip private or deleted queue entries.
 
 If MiSTer reports `Cache empty`, increase the player cache or reduce bitrate:
 
