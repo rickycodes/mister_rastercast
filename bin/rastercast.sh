@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2029
 set -euo pipefail
 
 # Basic helpers
@@ -454,7 +455,6 @@ write_concat_list() {
 
 run_mister_ssh() {
   mister_ssh_used=1
-  # shellcheck disable=SC2029
   ssh "${ssh_opts[@]}" "${mister_user}@${mister_host}" "$@"
 }
 
@@ -462,7 +462,6 @@ run_mister_playback() {
   case "$mister_tty" in
     1 | yes | true)
       mister_ssh_used=1
-      # shellcheck disable=SC2029
       ssh "${ssh_opts[@]}" -t "${mister_user}@${mister_host}" "$@"
       ;;
     0 | no | false)
