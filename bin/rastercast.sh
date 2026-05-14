@@ -2,6 +2,8 @@
 # shellcheck disable=SC2029
 set -euo pipefail
 
+valid_video_effects="none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp"
+
 # Basic helpers
 
 usage() {
@@ -52,6 +54,31 @@ is_http_url() {
 
 is_ytdlp_url() {
   [[ "$1" =~ ^https?://([^/?#]+\.)?(youtube\.com|youtu\.be)([/?#]|$) ]]
+}
+
+is_enabled() {
+  case "$1" in
+    1 | yes | true)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+validate_bool() {
+  local name=$1
+  local value=$2
+
+  case "$value" in
+    1 | yes | true | 0 | no | false)
+      ;;
+    *)
+      printf 'error: %s must be 1 or 0\n' "$name" >&2
+      exit 1
+      ;;
+  esac
 }
 
 show_ffmpeg_log() {
@@ -149,27 +176,13 @@ validate_config() {
       ;;
   esac
 
-  case "$ytdlp_playlist" in
-    1 | yes | true | 0 | no | false)
-      ;;
-    *)
-      printf 'error: RASTERCAST_YTDLP_PLAYLIST must be 1 or 0\n' >&2
-      exit 1
-      ;;
-  esac
-  if [[ -n "$ytdlp_playlist_items" && "$ytdlp_playlist" != "1" && "$ytdlp_playlist" != "yes" && "$ytdlp_playlist" != "true" ]]; then
+  validate_bool RASTERCAST_YTDLP_PLAYLIST "$ytdlp_playlist"
+  if [[ -n "$ytdlp_playlist_items" ]] && ! is_enabled "$ytdlp_playlist"; then
     printf 'error: RASTERCAST_YTDLP_PLAYLIST_ITEMS requires RASTERCAST_YTDLP_PLAYLIST=1\n' >&2
     exit 1
   fi
 
-  case "$queue_skip_unavailable" in
-    1 | yes | true | 0 | no | false)
-      ;;
-    *)
-      printf 'error: RASTERCAST_QUEUE_SKIP_UNAVAILABLE must be 1 or 0\n' >&2
-      exit 1
-      ;;
-  esac
+  validate_bool RASTERCAST_QUEUE_SKIP_UNAVAILABLE "$queue_skip_unavailable"
 
   case "$video_fit" in
     auto | contain | cover)
@@ -305,7 +318,7 @@ validate_video_effects() {
     fi
     if ! video_effect_filter "$effect" >/dev/null; then
       printf 'error: unknown RASTERCAST_VIDEO_EFFECT: %s\n' "$effect" >&2
-      printf 'error: valid effects: none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp\n' >&2
+      printf 'error: valid effects: %s\n' "$valid_video_effects" >&2
       exit 1
     fi
   done
@@ -321,6 +334,65 @@ append_video_effects() {
       video_filter="${video_filter},${effect_filter}"
     fi
   done
+}
+
+build_video_filter() {
+  local fit="$video_fit"
+
+  if [[ "$fit" == "auto" ]]; then
+    if (( input_uses_ytdlp )); then
+      fit=cover
+    else
+      fit=contain
+    fi
+  fi
+
+  case "$fit" in
+    contain)
+      video_filter="scale=${fit_width}:${fit_height}:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2:black"
+      ;;
+    cover)
+      video_filter="scale=${fit_width}:${fit_height}:force_original_aspect_ratio=increase:force_divisible_by=2,setsar=1,crop=${fit_width}:${fit_height},pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2:black"
+      ;;
+  esac
+
+  append_video_effects
+
+  if [[ -n "$output_fps" ]]; then
+    video_filter="${video_filter},fps=${output_fps}"
+  fi
+
+  if [[ "$video_speed" != "1" && "$video_speed" != "1.0" ]]; then
+    video_filter="${video_filter},setpts=PTS/${video_speed}"
+  fi
+}
+
+build_audio_filter() {
+  if [[ "$video_speed" != "1" && "$video_speed" != "1.0" ]]; then
+    audio_filter="atempo=${video_speed}"
+  else
+    audio_filter=""
+  fi
+
+  case "$audio_effect" in
+    none)
+      ;;
+    echo)
+      audio_filter="${audio_filter:+${audio_filter},}aecho=0.8:0.88:60:0.35"
+      ;;
+    robot)
+      audio_filter="${audio_filter:+${audio_filter},}afftfilt=real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)',aresample=44100"
+      ;;
+    radio)
+      audio_filter="${audio_filter:+${audio_filter},}highpass=f=300,lowpass=f=3000,acompressor=threshold=-18dB:ratio=4:attack=5:release=80"
+      ;;
+    deep)
+      audio_filter="${audio_filter:+${audio_filter},}asetrate=44100*0.85,aresample=44100,atempo=1.17647"
+      ;;
+    chipmunk)
+      audio_filter="${audio_filter:+${audio_filter},}asetrate=44100*1.25,aresample=44100,atempo=0.8"
+      ;;
+  esac
 }
 
 build_ytdlp_args() {
@@ -347,19 +419,17 @@ expand_playlist_input() {
     return
   fi
 
-  case "$ytdlp_playlist" in
-    1 | yes | true)
-      printf 'rastercast: expanding playlist with yt-dlp: %s\n' "$item" >&2
-      local playlist_args=(--flat-playlist --print webpage_url)
-      if [[ -n "$ytdlp_playlist_items" ]]; then
-        playlist_args+=(--playlist-items "$ytdlp_playlist_items")
-      fi
-      yt-dlp "${ytdlp_args[@]}" "${playlist_args[@]}" "$item" 2>>"${ffmpeg_log}"
-      ;;
-    *)
-      printf '%s\n' "$item"
-      ;;
-  esac
+  if ! is_enabled "$ytdlp_playlist"; then
+    printf '%s\n' "$item"
+    return
+  fi
+
+  printf 'rastercast: expanding playlist with yt-dlp: %s\n' "$item" >&2
+  local playlist_args=(--flat-playlist --print webpage_url)
+  if [[ -n "$ytdlp_playlist_items" ]]; then
+    playlist_args+=(--playlist-items "$ytdlp_playlist_items")
+  fi
+  yt-dlp "${ytdlp_args[@]}" "${playlist_args[@]}" "$item" 2>>"${ffmpeg_log}"
 }
 
 resolve_queue_item() {
@@ -428,12 +498,10 @@ write_concat_list() {
     index=$((index + 1))
     printf 'rastercast: preparing queue item %s/%s\n' "$index" "${#expanded_items[@]}" >&2
     if ! resolved=$(resolve_queue_item "$item"); then
-      case "$queue_skip_unavailable" in
-        1 | yes | true)
-          printf 'rastercast: skipping unavailable queue item %s/%s\n' "$index" "${#expanded_items[@]}" >&2
-          continue
-          ;;
-      esac
+      if is_enabled "$queue_skip_unavailable"; then
+        printf 'rastercast: skipping unavailable queue item %s/%s\n' "$index" "${#expanded_items[@]}" >&2
+        continue
+      fi
       touch "$stream_error"
       printf 'error: failed to prepare queue item %s/%s\n' "$index" "${#expanded_items[@]}" >&2
       show_ffmpeg_log
@@ -570,58 +638,10 @@ start_server() {
 
 start_ffmpeg() {
   local audio_filter
-  local fit="$video_fit"
   local video_filter
 
-  if [[ "$fit" == "auto" ]]; then
-    if (( input_uses_ytdlp )); then
-      fit=cover
-    else
-      fit=contain
-    fi
-  fi
-
-  case "$fit" in
-    contain)
-      video_filter="scale=${fit_width}:${fit_height}:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2:black"
-      ;;
-    cover)
-      video_filter="scale=${fit_width}:${fit_height}:force_original_aspect_ratio=increase:force_divisible_by=2,setsar=1,crop=${fit_width}:${fit_height},pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2:black"
-      ;;
-  esac
-
-  append_video_effects
-
-  if [[ -n "$output_fps" ]]; then
-    video_filter="${video_filter},fps=${output_fps}"
-  fi
-
-  if [[ "$video_speed" != "1" && "$video_speed" != "1.0" ]]; then
-    video_filter="${video_filter},setpts=PTS/${video_speed}"
-    audio_filter="atempo=${video_speed}"
-  else
-    audio_filter=""
-  fi
-
-  case "$audio_effect" in
-    none)
-      ;;
-    echo)
-      audio_filter="${audio_filter:+${audio_filter},}aecho=0.8:0.88:60:0.35"
-      ;;
-    robot)
-      audio_filter="${audio_filter:+${audio_filter},}afftfilt=real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)',aresample=44100"
-      ;;
-    radio)
-      audio_filter="${audio_filter:+${audio_filter},}highpass=f=300,lowpass=f=3000,acompressor=threshold=-18dB:ratio=4:attack=5:release=80"
-      ;;
-    deep)
-      audio_filter="${audio_filter:+${audio_filter},}asetrate=44100*0.85,aresample=44100,atempo=1.17647"
-      ;;
-    chipmunk)
-      audio_filter="${audio_filter:+${audio_filter},}asetrate=44100*1.25,aresample=44100,atempo=0.8"
-      ;;
-  esac
+  build_video_filter
+  build_audio_filter
 
   local ffmpeg_args=(
     -hide_banner
