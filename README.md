@@ -69,6 +69,19 @@ Queue multiple videos for back-to-back playback:
 bin/rastercast.sh /path/to/one.mkv /path/to/two.mkv /path/to/three.mkv
 ```
 
+Queue a directory of episodes with shell expansion:
+
+```bash
+bin/rastercast.sh /path/to/season/*.mkv
+```
+
+If paths contain spaces, use a shell array:
+
+```bash
+episodes=(/path/to/season/*.mkv)
+bin/rastercast.sh "${episodes[@]}"
+```
+
 Or stream a YouTube URL through `yt-dlp`:
 
 ```bash
