@@ -28,7 +28,6 @@ Environment:
   RASTERCAST_YTDLP_COOKIES_FROM_BROWSER  Browser name for yt-dlp cookies
   RASTERCAST_YTDLP_JS_RUNTIME  JavaScript runtime for yt-dlp extraction
   RASTERCAST_YTDLP_REMOTE_COMPONENTS  Remote yt-dlp components, e.g. ejs:github
-  RASTERCAST_YTDLP_PLAYLIST  Expand yt-dlp playlist URLs: 1 or 0 (default: 0)
   RASTERCAST_YTDLP_PLAYLIST_ITEMS  yt-dlp playlist items/range, e.g. 1:10
   RASTERCAST_QUEUE_SKIP_UNAVAILABLE  Skip unavailable queue items: 1 or 0 (default: 0)
   RASTERCAST_STARTUP_TIMEOUT  Seconds to wait for stream startup (default: 30)
@@ -122,7 +121,6 @@ load_config() {
   ytdlp_cookies_from_browser=${RASTERCAST_YTDLP_COOKIES_FROM_BROWSER:-}
   ytdlp_js_runtime=${RASTERCAST_YTDLP_JS_RUNTIME:-}
   ytdlp_remote_components=${RASTERCAST_YTDLP_REMOTE_COMPONENTS:-}
-  ytdlp_playlist=${RASTERCAST_YTDLP_PLAYLIST:-0}
   ytdlp_playlist_items=${RASTERCAST_YTDLP_PLAYLIST_ITEMS:-}
   queue_skip_unavailable=${RASTERCAST_QUEUE_SKIP_UNAVAILABLE:-0}
   startup_timeout=${RASTERCAST_STARTUP_TIMEOUT:-30}
@@ -175,12 +173,6 @@ validate_config() {
       exit 1
       ;;
   esac
-
-  validate_bool RASTERCAST_YTDLP_PLAYLIST "$ytdlp_playlist"
-  if [[ -n "$ytdlp_playlist_items" ]] && ! is_enabled "$ytdlp_playlist"; then
-    printf 'error: RASTERCAST_YTDLP_PLAYLIST_ITEMS requires RASTERCAST_YTDLP_PLAYLIST=1\n' >&2
-    exit 1
-  fi
 
   validate_bool RASTERCAST_QUEUE_SKIP_UNAVAILABLE "$queue_skip_unavailable"
 
@@ -411,6 +403,18 @@ build_ytdlp_args() {
   fi
 }
 
+is_ytdlp_playlist() {
+  local item=$1
+  local extractor_key
+
+  if ! should_use_ytdlp "$item"; then
+    return 1
+  fi
+
+  extractor_key=$(yt-dlp "${ytdlp_args[@]}" --flat-playlist --print extractor_key --playlist-items 1 "$item" 2>>"${ffmpeg_log}" | sed -n '1p')
+  [[ "$extractor_key" == "YoutubeTab" ]]
+}
+
 expand_playlist_input() {
   local item=$1
 
@@ -419,7 +423,7 @@ expand_playlist_input() {
     return
   fi
 
-  if ! is_enabled "$ytdlp_playlist"; then
+  if ! is_ytdlp_playlist "$item"; then
     printf '%s\n' "$item"
     return
   fi

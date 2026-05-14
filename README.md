@@ -84,8 +84,8 @@ bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID_1" "https://www.yout
 Or expand a YouTube playlist URL:
 
 ```bash
-RASTERCAST_YTDLP_PLAYLIST=1 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
-RASTERCAST_YTDLP_PLAYLIST=1 RASTERCAST_YTDLP_PLAYLIST_ITEMS=1:5 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
+bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
+RASTERCAST_YTDLP_PLAYLIST_ITEMS=1:5 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
 ```
 
 Direct HTTP(S) media URLs are passed to `ffmpeg` without `yt-dlp`:
@@ -167,8 +167,7 @@ YouTube and other `yt-dlp` inputs:
 - `RASTERCAST_YTDLP_COOKIES` passes an exported cookies file.
 - `RASTERCAST_YTDLP_JS_RUNTIME` enables a JavaScript runtime for extraction, for example `node`.
 - `RASTERCAST_YTDLP_REMOTE_COMPONENTS` allows remote yt-dlp components, for example `ejs:github`.
-- `RASTERCAST_YTDLP_PLAYLIST` expands yt-dlp playlist URLs when set to `1`, default `0`.
-- `RASTERCAST_YTDLP_PLAYLIST_ITEMS` limits playlist expansion, for example `1:10`.
+- `RASTERCAST_YTDLP_PLAYLIST_ITEMS` limits YouTube playlist expansion, for example `1:10`.
 - `RASTERCAST_QUEUE_SKIP_UNAVAILABLE` skips private/deleted queue items when set to `1`, default `0`.
 
 MiSTer auto-launch:
@@ -210,9 +209,9 @@ RASTERCAST_YTDLP_COOKIES_FROM_BROWSER=firefox bin/rastercast.sh "https://www.you
 RASTERCAST_YTDLP_COOKIES=/path/to/cookies.txt bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP_JS_RUNTIME=node bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
-RASTERCAST_YTDLP_PLAYLIST=1 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
-RASTERCAST_YTDLP_PLAYLIST=1 RASTERCAST_YTDLP_PLAYLIST_ITEMS=1:5 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
-RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1 RASTERCAST_YTDLP_PLAYLIST=1 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
+bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
+RASTERCAST_YTDLP_PLAYLIST_ITEMS=1:5 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
+RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
 ```
 
 `RASTERCAST_VIDEO_FIT=auto` is the default. It uses letterboxing for local files and direct media URLs, but center-crops `yt-dlp` inputs to fill the 320x240 CRT frame.
