@@ -444,8 +444,16 @@ build_ffmpeg_output_args() {
   if [[ "$visualizer" == "none" ]]; then
     ffmpeg_output_args=(-map 0:v:0 -map 0:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
   else
+    local effect
+    local effect_filter
     local viz_filter
     viz_filter="$(visualizer_filter),setsar=1,pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2:black"
+    for effect in "${video_effects[@]}"; do
+      effect_filter=$(video_effect_filter "$effect")
+      if [[ -n "$effect_filter" ]]; then
+        viz_filter="${viz_filter},${effect_filter}"
+      fi
+    done
     if [[ -n "$output_fps" ]]; then
       viz_filter="${viz_filter},fps=${output_fps}"
     fi
