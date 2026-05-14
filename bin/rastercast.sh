@@ -21,6 +21,7 @@ Environment:
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
   RASTERCAST_VIDEO_EFFECT  Comma-separated video effects, or none
   RASTERCAST_VIDEO_SPEED  Playback speed multiplier, from 0.5 to 2.0 (default: 1)
+  RASTERCAST_VISUALIZER  Replace video with audio visualizer: none, waves, spectrum, cqt, vectorscope
   RASTERCAST_AUDIO_EFFECT  Audio effect: none, echo, robot, radio, deep, chipmunk
   RASTERCAST_YTDLP       Force yt-dlp for URL input: 1 or 0 (default: auto)
   RASTERCAST_YTDLP_FORMAT  yt-dlp format for URL inputs (default: best[height<=480]/best)
@@ -115,6 +116,7 @@ load_config() {
   video_fit=${RASTERCAST_VIDEO_FIT:-auto}
   video_effect=${RASTERCAST_VIDEO_EFFECT:-none}
   video_speed=${RASTERCAST_VIDEO_SPEED:-1}
+  visualizer=${RASTERCAST_VISUALIZER:-none}
   audio_effect=${RASTERCAST_AUDIO_EFFECT:-none}
   ytdlp_format=${RASTERCAST_YTDLP_FORMAT:-best[height<=480]/best}
   ytdlp_cookies=${RASTERCAST_YTDLP_COOKIES:-}
@@ -212,6 +214,15 @@ validate_config() {
   fit_height=$((fit_height / 2 * 2))
 
   validate_video_effects
+
+  case "$visualizer" in
+    none | waves | spectrum | cqt | vectorscope)
+      ;;
+    *)
+      printf 'error: RASTERCAST_VISUALIZER must be one of: none, waves, spectrum, cqt, vectorscope\n' >&2
+      exit 1
+      ;;
+  esac
 
   case "$audio_effect" in
     none | echo | robot | radio | deep | chipmunk)
@@ -385,6 +396,68 @@ build_audio_filter() {
       audio_filter="${audio_filter:+${audio_filter},}asetrate=44100*1.25,aresample=44100,atempo=0.8"
       ;;
   esac
+}
+
+visualizer_filter() {
+  case "$visualizer" in
+    waves)
+      printf 'showwaves=s=%sx%s:mode=cline:colors=00ff66|00ccff:scale=sqrt' "$fit_width" "$fit_height"
+      ;;
+    spectrum)
+      printf 'showspectrum=s=%sx%s:mode=combined:color=intensity:scale=cbrt:slide=scroll' "$fit_width" "$fit_height"
+      ;;
+    cqt)
+      printf 'showcqt=s=%sx%s:count=1' "$fit_width" "$fit_height"
+      ;;
+    vectorscope)
+      printf 'avectorscope=s=%sx%s:mode=lissajous:zoom=1.3,format=yuv420p' "$fit_width" "$fit_height"
+      ;;
+  esac
+}
+
+build_ffmpeg_output_args() {
+  ffmpeg_output_args=(
+    -c:v libx264
+    -preset ultrafast
+    -tune zerolatency
+    -profile:v baseline
+    -level 3.0
+    -b:v "$video_bitrate"
+    -maxrate "$video_bitrate"
+    -bufsize 2000k
+    -pix_fmt yuv420p
+    -g 60
+    -keyint_min 60
+    -sc_threshold 0
+    -c:a mp2
+    -b:a 128k
+    -ar 44100
+    -ac 2
+    -muxpreload 0
+    -muxdelay 0
+    -mpegts_flags +resend_headers
+    -avoid_negative_ts make_zero
+    -f mpegts
+    "$stream_path"
+  )
+
+  if [[ "$visualizer" == "none" ]]; then
+    ffmpeg_output_args=(-map 0:v:0 -map 0:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
+  else
+    local viz_filter
+    viz_filter="$(visualizer_filter),setsar=1,pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2:black"
+    if [[ -n "$output_fps" ]]; then
+      viz_filter="${viz_filter},fps=${output_fps}"
+    fi
+    if [[ "$video_speed" != "1" && "$video_speed" != "1.0" ]]; then
+      viz_filter="${viz_filter},setpts=PTS/${video_speed}"
+    fi
+    ffmpeg_output_args=(-filter_complex "[0:a]${viz_filter}[v]" -map "[v]" -map 0:a:0 "${ffmpeg_output_args[@]}")
+  fi
+
+  if [[ -n "$audio_filter" ]]; then
+    ffmpeg_output_args=(-af "$audio_filter" "${ffmpeg_output_args[@]}")
+  fi
 }
 
 build_ytdlp_args() {
@@ -642,6 +715,7 @@ start_server() {
 
 start_ffmpeg() {
   local audio_filter
+  local ffmpeg_output_args
   local video_filter
 
   build_video_filter
@@ -654,36 +728,7 @@ start_ffmpeg() {
     -re
     -fflags +genpts
   )
-  local ffmpeg_output_args=(
-    -map 0:v:0
-    -map 0:a?
-    -vf "$video_filter"
-    -c:v libx264
-    -preset ultrafast
-    -tune zerolatency
-    -profile:v baseline
-    -level 3.0
-    -b:v "$video_bitrate"
-    -maxrate "$video_bitrate"
-    -bufsize 2000k
-    -pix_fmt yuv420p
-    -g 60
-    -keyint_min 60
-    -sc_threshold 0
-    -c:a mp2
-    -b:a 128k
-    -ar 44100
-    -ac 2
-    -muxpreload 0
-    -muxdelay 0
-    -mpegts_flags +resend_headers
-    -avoid_negative_ts make_zero
-    -f mpegts
-    "$stream_path"
-  )
-  if [[ -n "$audio_filter" ]]; then
-    ffmpeg_output_args=(-af "$audio_filter" "${ffmpeg_output_args[@]}")
-  fi
+  build_ffmpeg_output_args
 
   write_concat_list
   ffmpeg "${ffmpeg_args[@]}" \
