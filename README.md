@@ -57,11 +57,15 @@ The default MiSTer SSH login is usually `root` with password `1`; SSH will promp
 
 ## Usage
 
+### Local Video
+
 Serve a local video from the PC and launch playback on MiSTer:
 
 ```bash
 bin/rastercast.sh /path/to/video.mkv
 ```
+
+### Local Queue
 
 Queue multiple videos for back-to-back playback:
 
@@ -69,11 +73,15 @@ Queue multiple videos for back-to-back playback:
 bin/rastercast.sh /path/to/one.mkv /path/to/two.mkv /path/to/three.mkv
 ```
 
+### Shell Expansion
+
 Queue a directory of episodes with shell expansion:
 
 ```bash
 bin/rastercast.sh /path/to/season/*.mkv
 ```
+
+### Shell Array
 
 If paths contain spaces, use a shell array:
 
@@ -82,11 +90,15 @@ episodes=(/path/to/season/*.mkv)
 bin/rastercast.sh "${episodes[@]}"
 ```
 
-Or stream a YouTube URL through `yt-dlp`:
+### YouTube Video
+
+Stream a YouTube URL through `yt-dlp`:
 
 ```bash
 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
+
+### YouTube Queue
 
 Queue multiple YouTube URLs:
 
@@ -94,12 +106,16 @@ Queue multiple YouTube URLs:
 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID_1" "https://www.youtube.com/watch?v=VIDEO_ID_2"
 ```
 
-Or expand a YouTube playlist URL:
+### YouTube Playlist
+
+Expand a YouTube playlist URL:
 
 ```bash
 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
 RASTERCAST_YTDLP_PLAYLIST_ITEMS=1:5 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
 ```
+
+### Direct Media URL
 
 Direct HTTP(S) media URLs are passed to `ffmpeg` without `yt-dlp`:
 
