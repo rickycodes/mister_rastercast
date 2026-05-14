@@ -169,6 +169,7 @@ YouTube and other `yt-dlp` inputs:
 - `RASTERCAST_YTDLP_REMOTE_COMPONENTS` allows remote yt-dlp components, for example `ejs:github`.
 - `RASTERCAST_YTDLP_PLAYLIST` expands yt-dlp playlist URLs when set to `1`, default `0`.
 - `RASTERCAST_YTDLP_PLAYLIST_ITEMS` limits playlist expansion, for example `1:10`.
+- `RASTERCAST_QUEUE_SKIP_UNAVAILABLE` skips private/deleted queue items when set to `1`, default `0`.
 
 MiSTer auto-launch:
 
@@ -211,6 +212,7 @@ RASTERCAST_YTDLP_JS_RUNTIME=node bin/rastercast.sh "https://www.youtube.com/watc
 RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP_PLAYLIST=1 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
 RASTERCAST_YTDLP_PLAYLIST=1 RASTERCAST_YTDLP_PLAYLIST_ITEMS=1:5 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
+RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1 RASTERCAST_YTDLP_PLAYLIST=1 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
 ```
 
 `RASTERCAST_VIDEO_FIT=auto` is the default. It uses letterboxing for local files and direct media URLs, but center-crops `yt-dlp` inputs to fill the 320x240 CRT frame.
@@ -220,7 +222,7 @@ RASTERCAST_YTDLP_PLAYLIST=1 RASTERCAST_YTDLP_PLAYLIST_ITEMS=1:5 bin/rastercast.s
 
 Age-restricted YouTube videos require authenticated cookies. Use `RASTERCAST_YTDLP_COOKIES_FROM_BROWSER` with a browser profile that is signed in to YouTube, or export cookies and pass the file with `RASTERCAST_YTDLP_COOKIES`.
 If YouTube signature solving fails, set `RASTERCAST_YTDLP_JS_RUNTIME=node`; newer `yt-dlp` builds may also need `RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github`.
-Queued YouTube playback resolves media URLs before starting ffmpeg and expects one muxed media URL per video. If yt-dlp returns separate video and audio URLs, use a muxed format such as `RASTERCAST_YTDLP_FORMAT='best[height<=480][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]'`.
+Queued YouTube playback resolves media URLs before starting ffmpeg and expects one muxed media URL per video. If yt-dlp returns separate video and audio URLs, use a muxed format such as `RASTERCAST_YTDLP_FORMAT='best[height<=480][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]'`. Use `RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1` to skip private or deleted queue entries.
 
 If MiSTer reports `Cache empty`, increase the player cache or reduce bitrate:
 

@@ -27,6 +27,7 @@ Environment:
   RASTERCAST_YTDLP_REMOTE_COMPONENTS  Remote yt-dlp components, e.g. ejs:github
   RASTERCAST_YTDLP_PLAYLIST  Expand yt-dlp playlist URLs: 1 or 0 (default: 0)
   RASTERCAST_YTDLP_PLAYLIST_ITEMS  yt-dlp playlist items/range, e.g. 1:10
+  RASTERCAST_QUEUE_SKIP_UNAVAILABLE  Skip unavailable queue items: 1 or 0 (default: 0)
   RASTERCAST_STARTUP_TIMEOUT  Seconds to wait for stream startup (default: 30)
   RASTERCAST_MISTER_AUTO  Automatically launch playback on MiSTer: 1 or 0 (default: 1)
   RASTERCAST_MISTER_HOST  MiSTer host/IP (default: mister)
@@ -95,6 +96,7 @@ load_config() {
   ytdlp_remote_components=${RASTERCAST_YTDLP_REMOTE_COMPONENTS:-}
   ytdlp_playlist=${RASTERCAST_YTDLP_PLAYLIST:-0}
   ytdlp_playlist_items=${RASTERCAST_YTDLP_PLAYLIST_ITEMS:-}
+  queue_skip_unavailable=${RASTERCAST_QUEUE_SKIP_UNAVAILABLE:-0}
   startup_timeout=${RASTERCAST_STARTUP_TIMEOUT:-30}
 
   mister_auto=${RASTERCAST_MISTER_AUTO:-1}
@@ -158,6 +160,15 @@ validate_config() {
     printf 'error: RASTERCAST_YTDLP_PLAYLIST_ITEMS requires RASTERCAST_YTDLP_PLAYLIST=1\n' >&2
     exit 1
   fi
+
+  case "$queue_skip_unavailable" in
+    1 | yes | true | 0 | no | false)
+      ;;
+    *)
+      printf 'error: RASTERCAST_QUEUE_SKIP_UNAVAILABLE must be 1 or 0\n' >&2
+      exit 1
+      ;;
+  esac
 
   case "$video_fit" in
     auto | contain | cover)
@@ -365,26 +376,20 @@ resolve_queue_item() {
 
   printf 'rastercast: resolving URL input with yt-dlp: %s\n' "$item" >&2
   if ! yt-dlp "${ytdlp_args[@]}" --simulate "$item" >>"${ffmpeg_log}" 2>&1; then
-    touch "$stream_error"
-    printf 'error: yt-dlp failed while resolving URL input\n' >&2
-    show_ffmpeg_log
-    exit 1
+    printf 'warning: yt-dlp failed while resolving queue item: %s\n' "$item" >&2
+    return 1
   fi
 
   if ! urls=$(yt-dlp "${ytdlp_args[@]}" --get-url "$item" 2>>"${ffmpeg_log}"); then
-    touch "$stream_error"
-    printf 'error: yt-dlp failed while getting media URL\n' >&2
-    show_ffmpeg_log
-    exit 1
+    printf 'warning: yt-dlp failed while getting media URL: %s\n' "$item" >&2
+    return 1
   fi
 
   url_count=$(printf '%s\n' "$urls" | sed '/^$/d' | wc -l)
   if [[ "$url_count" != "1" ]]; then
-    touch "$stream_error"
-    printf 'error: yt-dlp returned %s media URLs for one queue item\n' "$url_count" >&2
+    printf 'warning: yt-dlp returned %s media URLs for queue item: %s\n' "$url_count" "$item" >&2
     printf 'error: use a muxed format, e.g. RASTERCAST_YTDLP_FORMAT='\''best[height<=480][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]'\''\n' >&2
-    show_ffmpeg_log
-    exit 1
+    return 1
   fi
 
   printf '%s\n' "$urls"
@@ -399,6 +404,7 @@ write_concat_list() {
   local expanded_items=()
   local item
   local resolved
+  local resolved_count=0
 
   concat_list="${workdir}/queue.ffconcat"
   : > "$concat_list"
@@ -420,9 +426,28 @@ write_concat_list() {
   for item in "${expanded_items[@]}"; do
     index=$((index + 1))
     printf 'rastercast: preparing queue item %s/%s\n' "$index" "${#expanded_items[@]}" >&2
-    resolved=$(resolve_queue_item "$item")
+    if ! resolved=$(resolve_queue_item "$item"); then
+      case "$queue_skip_unavailable" in
+        1 | yes | true)
+          printf 'rastercast: skipping unavailable queue item %s/%s\n' "$index" "${#expanded_items[@]}" >&2
+          continue
+          ;;
+      esac
+      touch "$stream_error"
+      printf 'error: failed to prepare queue item %s/%s\n' "$index" "${#expanded_items[@]}" >&2
+      show_ffmpeg_log
+      exit 1
+    fi
     concat_escape "$resolved" >> "$concat_list"
+    resolved_count=$((resolved_count + 1))
   done
+
+  if (( resolved_count == 0 )); then
+    touch "$stream_error"
+    printf 'error: no playable queue items resolved\n' >&2
+    show_ffmpeg_log
+    exit 1
+  fi
 }
 
 # MiSTer control
