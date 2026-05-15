@@ -2,7 +2,7 @@
 # shellcheck disable=SC2029
 set -euo pipefail
 
-valid_video_effects="none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp"
+valid_video_effects="none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp, avs-feedback, avs-grid, avs-crt, avs-neon"
 
 # Basic helpers
 
@@ -385,6 +385,18 @@ video_effect_filter() {
       ;;
     scanwarp)
       printf '%s\n' "rgbashift=rh=4:bh=-4,noise=alls=12:allf=t+u"
+      ;;
+    avs-feedback)
+      printf '%s\n' "tmix=frames=9:weights='1 1 1 1 1 1 1 1 1',eq=contrast=1.45:saturation=1.45:brightness=-0.04,rgbashift=rh=3:bh=-3"
+      ;;
+    avs-grid)
+      printf '%s\n' "scale=iw/2:ih/2:flags=neighbor,tile=2x2,eq=contrast=1.3:saturation=1.35"
+      ;;
+    avs-crt)
+      printf '%s\n' "noise=alls=10:allf=t+u,eq=contrast=1.25:saturation=1.25,rgbashift=rh=2:bh=-2"
+      ;;
+    avs-neon)
+      printf '%s\n' "edgedetect=low=0.04:high=0.18,eq=contrast=1.7:saturation=1.6,lagfun=decay=0.92"
       ;;
     *)
       return 1
