@@ -24,6 +24,7 @@ Environment:
   RASTERCAST_VISUALIZER  Replace video with audio visualizer: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits, projectm
   RASTERCAST_PROJECTM    projectM helper path (default: ~/projects/rastercast-projectm/rastercast-projectm)
   RASTERCAST_PROJECTM_FPS  projectM helper FPS (default: RASTERCAST_FPS or 30)
+  RASTERCAST_PROJECTM_QUEUE_SIZE  ffmpeg queue size for projectM pipes (default: 1024)
   RASTERCAST_CAPTURE_WINDOW  X11 window id to capture as video, e.g. 0x1a00021
   RASTERCAST_CAPTURE_DISPLAY  X11 display to capture from (default: DISPLAY)
   RASTERCAST_CAPTURE_FPS  X11 capture frame rate (default: 30)
@@ -127,6 +128,7 @@ load_config() {
   visualizer=${RASTERCAST_VISUALIZER:-none}
   projectm_bin=${RASTERCAST_PROJECTM:-${HOME}/projects/rastercast-projectm/rastercast-projectm}
   projectm_fps=${RASTERCAST_PROJECTM_FPS:-${output_fps:-30}}
+  projectm_queue_size=${RASTERCAST_PROJECTM_QUEUE_SIZE:-1024}
   capture_window=${RASTERCAST_CAPTURE_WINDOW:-}
   capture_display=${RASTERCAST_CAPTURE_DISPLAY:-${DISPLAY:-}}
   capture_fps=${RASTERCAST_CAPTURE_FPS:-30}
@@ -259,6 +261,10 @@ validate_config() {
     fi
     if [[ ! "$projectm_fps" =~ ^[1-9][0-9]*$ ]]; then
       printf 'error: RASTERCAST_PROJECTM_FPS must be a positive integer\n' >&2
+      exit 1
+    fi
+    if [[ ! "$projectm_queue_size" =~ ^[1-9][0-9]*$ ]]; then
+      printf 'error: RASTERCAST_PROJECTM_QUEUE_SIZE must be a positive integer\n' >&2
       exit 1
     fi
   fi
@@ -894,11 +900,13 @@ start_projectm_pipeline() {
     -nostdin \
     -fflags +genpts \
     -f rawvideo \
+    -thread_queue_size "$projectm_queue_size" \
     -pix_fmt rgb24 \
     -video_size "$video_size" \
     -framerate "$projectm_fps" \
     -i "$projectm_video_pipe" \
     -re \
+    -thread_queue_size "$projectm_queue_size" \
     -f concat \
     -safe 0 \
     -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
@@ -908,10 +916,12 @@ start_projectm_pipeline() {
 
   ffmpeg \
     -hide_banner \
+    -y \
     -loglevel error \
     -nostdin \
     -re \
     -fflags +genpts \
+    -thread_queue_size "$projectm_queue_size" \
     -f concat \
     -safe 0 \
     -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
