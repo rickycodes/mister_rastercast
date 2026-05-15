@@ -21,7 +21,9 @@ Environment:
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
   RASTERCAST_VIDEO_EFFECT  Comma-separated video effects, or none
   RASTERCAST_VIDEO_SPEED  Playback speed multiplier, from 0.5 to 2.0 (default: 1)
-  RASTERCAST_VISUALIZER  Replace video with audio visualizer: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits
+  RASTERCAST_VISUALIZER  Replace video with audio visualizer: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits, projectm
+  RASTERCAST_PROJECTM    projectM helper path (default: ~/projects/rastercast-projectm/rastercast-projectm)
+  RASTERCAST_PROJECTM_FPS  projectM helper FPS (default: RASTERCAST_FPS or 30)
   RASTERCAST_CAPTURE_WINDOW  X11 window id to capture as video, e.g. 0x1a00021
   RASTERCAST_CAPTURE_DISPLAY  X11 display to capture from (default: DISPLAY)
   RASTERCAST_CAPTURE_FPS  X11 capture frame rate (default: 30)
@@ -123,6 +125,8 @@ load_config() {
   video_effect=${RASTERCAST_VIDEO_EFFECT:-none}
   video_speed=${RASTERCAST_VIDEO_SPEED:-1}
   visualizer=${RASTERCAST_VISUALIZER:-none}
+  projectm_bin=${RASTERCAST_PROJECTM:-${HOME}/projects/rastercast-projectm/rastercast-projectm}
+  projectm_fps=${RASTERCAST_PROJECTM_FPS:-${output_fps:-30}}
   capture_window=${RASTERCAST_CAPTURE_WINDOW:-}
   capture_display=${RASTERCAST_CAPTURE_DISPLAY:-${DISPLAY:-}}
   capture_fps=${RASTERCAST_CAPTURE_FPS:-30}
@@ -164,11 +168,15 @@ prepare_workdir() {
   workdir=$(mktemp -d "${TMPDIR:-/tmp}/rastercast.XXXXXX")
   server_pid=""
   ffmpeg_pid=""
+  pcm_ffmpeg_pid=""
+  projectm_pid=""
   ffmpeg_log="${workdir}/ffmpeg.log"
   server_log="${workdir}/server.log"
   stream_path="${workdir}/stream.ts"
   stream_done="${workdir}/stream.done"
   stream_error="${workdir}/stream.error"
+  projectm_pcm_pipe="${workdir}/projectm.pcm"
+  projectm_video_pipe="${workdir}/projectm.rgb"
   stream_url="http://${host_ip}:${port}/stream.ts"
   ssh_control_path="${workdir}/ssh-control-%r@%h:%p"
   ssh_opts=(-o ControlMaster=auto -o ControlPersist=60 -o "ControlPath=${ssh_control_path}")
@@ -228,13 +236,32 @@ validate_config() {
   validate_video_effects
 
   case "$visualizer" in
-    none | waves | spectrum | cqt | vectorscope | freqs | spatial | histogram | bits)
+    none | waves | spectrum | cqt | vectorscope | freqs | spatial | histogram | bits | projectm)
       ;;
     *)
-      printf 'error: RASTERCAST_VISUALIZER must be one of: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits\n' >&2
+      printf 'error: RASTERCAST_VISUALIZER must be one of: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits, projectm\n' >&2
       exit 1
       ;;
   esac
+
+  if [[ "$visualizer" == "projectm" ]]; then
+    if [[ -n "$capture_window" ]]; then
+      printf 'error: RASTERCAST_VISUALIZER=projectm cannot be combined with RASTERCAST_CAPTURE_WINDOW\n' >&2
+      exit 1
+    fi
+    if [[ "$audio_monitor" != "none" ]]; then
+      printf 'error: RASTERCAST_VISUALIZER=projectm cannot be combined with RASTERCAST_AUDIO_MONITOR\n' >&2
+      exit 1
+    fi
+    if [[ ! -x "$projectm_bin" ]]; then
+      printf 'error: RASTERCAST_PROJECTM helper not executable: %s\n' "$projectm_bin" >&2
+      exit 1
+    fi
+    if [[ ! "$projectm_fps" =~ ^[1-9][0-9]*$ ]]; then
+      printf 'error: RASTERCAST_PROJECTM_FPS must be a positive integer\n' >&2
+      exit 1
+    fi
+  fi
 
   if [[ -n "$capture_window" ]]; then
     if [[ "$visualizer" != "none" ]]; then
@@ -506,7 +533,9 @@ build_ffmpeg_output_args() {
     "$stream_path"
   )
 
-  if [[ -n "$capture_window" ]]; then
+  if [[ "$visualizer" == "projectm" ]]; then
+    ffmpeg_output_args=(-map 0:v:0 -map 1:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
+  elif [[ -n "$capture_window" ]]; then
     ffmpeg_output_args=(-map 1:v:0 -map 0:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
   elif [[ "$visualizer" == "none" ]]; then
     ffmpeg_output_args=(-map 0:v:0 -map 0:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
@@ -810,6 +839,16 @@ launch_mister() {
 cleanup() {
   local status=$?
 
+  if [[ -n "${pcm_ffmpeg_pid}" ]] && kill -0 "${pcm_ffmpeg_pid}" 2>/dev/null; then
+    kill "${pcm_ffmpeg_pid}" 2>/dev/null || true
+    wait "${pcm_ffmpeg_pid}" 2>/dev/null || true
+  fi
+
+  if [[ -n "${projectm_pid}" ]] && kill -0 "${projectm_pid}" 2>/dev/null; then
+    kill "${projectm_pid}" 2>/dev/null || true
+    wait "${projectm_pid}" 2>/dev/null || true
+  fi
+
   if [[ -n "${ffmpeg_pid}" ]] && kill -0 "${ffmpeg_pid}" 2>/dev/null; then
     kill "${ffmpeg_pid}" 2>/dev/null || true
     wait "${ffmpeg_pid}" 2>/dev/null || true
@@ -840,6 +879,52 @@ start_server() {
   fi
 }
 
+start_projectm_pipeline() {
+  mkfifo "$projectm_pcm_pipe" "$projectm_video_pipe"
+
+  RASTERCAST_PROJECTM_WIDTH="$video_width" \
+    RASTERCAST_PROJECTM_HEIGHT="$video_height" \
+    RASTERCAST_PROJECTM_FPS="$projectm_fps" \
+    "$projectm_bin" --raw-video <"$projectm_pcm_pipe" >"$projectm_video_pipe" 2>>"${ffmpeg_log}" &
+  projectm_pid=$!
+
+  ffmpeg \
+    -hide_banner \
+    -loglevel error \
+    -nostdin \
+    -fflags +genpts \
+    -f rawvideo \
+    -pix_fmt rgb24 \
+    -video_size "$video_size" \
+    -framerate "$projectm_fps" \
+    -i "$projectm_video_pipe" \
+    -re \
+    -f concat \
+    -safe 0 \
+    -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+    -i "$concat_list" \
+    "${ffmpeg_output_args[@]}" >"${ffmpeg_log}" 2>&1 &
+  ffmpeg_pid=$!
+
+  ffmpeg \
+    -hide_banner \
+    -loglevel error \
+    -nostdin \
+    -re \
+    -fflags +genpts \
+    -f concat \
+    -safe 0 \
+    -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+    -i "$concat_list" \
+    -map 0:a:0 \
+    -vn \
+    -ac 2 \
+    -ar 44100 \
+    -f f32le \
+    "$projectm_pcm_pipe" >>"${ffmpeg_log}" 2>&1 &
+  pcm_ffmpeg_pid=$!
+}
+
 start_ffmpeg() {
   local audio_filter
   local ffmpeg_output_args
@@ -862,7 +947,9 @@ start_ffmpeg() {
   build_ffmpeg_monitor_output_args
 
   write_concat_list
-  if [[ -n "$capture_window" ]]; then
+  if [[ "$visualizer" == "projectm" ]]; then
+    start_projectm_pipeline
+  elif [[ -n "$capture_window" ]]; then
     ffmpeg "${ffmpeg_args[@]}" \
       -f concat \
       -safe 0 \

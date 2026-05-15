@@ -198,7 +198,9 @@ Video output:
 - `RASTERCAST_VIDEO_FIT` sets sizing: `auto`, `contain`, or `cover`; default `auto`.
 - `RASTERCAST_VIDEO_EFFECT` sets comma-separated effect presets: `none`, `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, or `scanwarp`; default `none`.
 - `RASTERCAST_VIDEO_SPEED` sets playback speed from `0.5` to `2.0`, default `1`.
-- `RASTERCAST_VISUALIZER` replaces source video with an audio visualizer: `none`, `waves`, `spectrum`, `cqt`, `vectorscope`, `freqs`, `spatial`, `histogram`, or `bits`; default `none`.
+- `RASTERCAST_VISUALIZER` replaces source video with an audio visualizer: `none`, `waves`, `spectrum`, `cqt`, `vectorscope`, `freqs`, `spatial`, `histogram`, `bits`, or `projectm`; default `none`.
+- `RASTERCAST_PROJECTM` sets the ProjectM helper path when `RASTERCAST_VISUALIZER=projectm`; default `~/projects/rastercast-projectm/rastercast-projectm`.
+- `RASTERCAST_PROJECTM_FPS` sets the ProjectM helper frame rate; default is `RASTERCAST_FPS` or `30`.
 - `RASTERCAST_CAPTURE_WINDOW` captures an X11 window id as video while the input supplies audio, for example `0x1a00021`; default unset.
 - `RASTERCAST_CAPTURE_DISPLAY` sets the X11 display for capture; default is `DISPLAY`.
 - `RASTERCAST_CAPTURE_FPS` sets the X11 capture frame rate, default `30`.
@@ -255,6 +257,7 @@ RASTERCAST_VISUALIZER=spectrum bin/rastercast.sh "https://www.youtube.com/watch?
 RASTERCAST_VISUALIZER=vectorscope bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=spatial bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=bits bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_VISUALIZER=projectm RASTERCAST_FPS=30 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_CAPTURE_WINDOW=0x1a00021 RASTERCAST_VIDEO_SIZE=512x240 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_AUDIO_MONITOR=pulse RASTERCAST_CAPTURE_WINDOW=0x1a00021 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_STREAM_AUDIO_DELAY_MS=300 RASTERCAST_AUDIO_MONITOR=pulse RASTERCAST_CAPTURE_WINDOW=0x1a00021 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
@@ -275,7 +278,7 @@ RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1 bin/rastercast.sh "https://www.youtube.com/p
 `RASTERCAST_VIDEO_SIZE` changes the PC-side stream size. MiSTer video mode and BVM support still need to match the resolution you choose. `RASTERCAST_DISPLAY_ASPECT=4:3` can correct geometry when a wide 240p mode like `512x240` is displayed as a 4:3 raster.
 `RASTERCAST_VIDEO_EFFECT` defaults to `none`; available effects are `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, and `scanwarp`. Multiple effects can be layered with commas; order matters.
 `RASTERCAST_VIDEO_SPEED` changes video and audio speed together. `RASTERCAST_AUDIO_EFFECT` can add `echo`, `robot`, `radio`, `deep`, or `chipmunk` processing.
-`RASTERCAST_VISUALIZER` replaces the source video with ffmpeg-generated visuals from the audio stream.
+`RASTERCAST_VISUALIZER` replaces the source video with generated visuals from the audio stream. The built-in ffmpeg visualizers run inside ffmpeg. `RASTERCAST_VISUALIZER=projectm` uses the external `rastercast-projectm` helper to render MilkDrop/projectM frames from raw PCM and feed them back into the stream.
 `RASTERCAST_CAPTURE_WINDOW` replaces the source video with a live X11 window capture and keeps the input audio. It cannot be combined with `RASTERCAST_VISUALIZER`. On Wayland, this works only when the target app is visible through XWayland/X11 capture.
 `RASTERCAST_AUDIO_MONITOR=pulse` sends the same source audio to the local PulseAudio/PipeWire default sink while streaming. This is intended for monitor-based visualizers; the QMMP ProjectM plugin only reacts to audio QMMP itself is playing.
 `RASTERCAST_STREAM_AUDIO_DELAY_MS` compensates for the local audio-to-visualizer-to-window-capture path by delaying only the audio in the MiSTer stream. Start around `200` to `500` ms when using `RASTERCAST_CAPTURE_WINDOW` with `RASTERCAST_AUDIO_MONITOR=pulse`.
