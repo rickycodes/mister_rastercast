@@ -123,6 +123,18 @@ Direct HTTP(S) media URLs are passed to `ffmpeg` without `yt-dlp`:
 bin/rastercast.sh "https://pc-host/video.mp4"
 ```
 
+### X11 Window Capture
+
+Use an X11 window as the video source while the input file or URL supplies audio:
+
+```bash
+RASTERCAST_CAPTURE_WINDOW=0x1a00021 \
+RASTERCAST_VIDEO_SIZE=512x240 \
+bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+```
+
+This can capture a ProjectM window for MilkDrop-style visuals. Find the window id with `xwininfo`, then click the ProjectM window.
+
 That command:
 
 - creates a temporary MPEG-TS stream
@@ -187,6 +199,12 @@ Video output:
 - `RASTERCAST_VIDEO_EFFECT` sets comma-separated effect presets: `none`, `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, or `scanwarp`; default `none`.
 - `RASTERCAST_VIDEO_SPEED` sets playback speed from `0.5` to `2.0`, default `1`.
 - `RASTERCAST_VISUALIZER` replaces source video with an audio visualizer: `none`, `waves`, `spectrum`, `cqt`, `vectorscope`, `freqs`, `spatial`, `histogram`, or `bits`; default `none`.
+- `RASTERCAST_CAPTURE_WINDOW` captures an X11 window id as video while the input supplies audio, for example `0x1a00021`; default unset.
+- `RASTERCAST_CAPTURE_DISPLAY` sets the X11 display for capture; default is `DISPLAY`.
+- `RASTERCAST_CAPTURE_FPS` sets the X11 capture frame rate, default `30`.
+- `RASTERCAST_AUDIO_MONITOR` also plays source audio locally for monitor-based visualizers: `none` or `pulse`; default `none`.
+- `RASTERCAST_AUDIO_MONITOR_SINK` sets the local PulseAudio/PipeWire sink when audio monitoring is enabled; default `default`.
+- `RASTERCAST_STREAM_AUDIO_DELAY_MS` delays the streamed audio only, useful for lining up captured visualizer video; default `0`.
 - `RASTERCAST_AUDIO_EFFECT` sets an audio effect preset: `none`, `echo`, `robot`, `radio`, `deep`, or `chipmunk`; default `none`.
 
 YouTube and other `yt-dlp` inputs:
@@ -214,6 +232,8 @@ MiSTer playback:
 - `RASTERCAST_MPLAYER_VO` optionally sets the `mplayer` video output, for example `fbdev` or `fbdev2`.
 - `RASTERCAST_CACHE_KB` sets the `mplayer` cache size in KiB, default `8192`.
 - `RASTERCAST_CACHE_MIN` sets the percent cache fill before playback starts, default `10`.
+- `RASTERCAST_MPLAYER_AUTOSYNC` optionally sets `mplayer -autosync`, for example `30`.
+- `RASTERCAST_MPLAYER_FRAMEDROP` enables `mplayer -framedrop` when set to `1`, default `0`.
 
 Optional tuning:
 
@@ -235,6 +255,9 @@ RASTERCAST_VISUALIZER=spectrum bin/rastercast.sh "https://www.youtube.com/watch?
 RASTERCAST_VISUALIZER=vectorscope bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=spatial bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=bits bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_CAPTURE_WINDOW=0x1a00021 RASTERCAST_VIDEO_SIZE=512x240 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_AUDIO_MONITOR=pulse RASTERCAST_CAPTURE_WINDOW=0x1a00021 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_STREAM_AUDIO_DELAY_MS=300 RASTERCAST_AUDIO_MONITOR=pulse RASTERCAST_CAPTURE_WINDOW=0x1a00021 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_AUDIO_EFFECT=echo bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_AUDIO_EFFECT=radio bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP=1 bin/rastercast.sh "https://example.com/video-page"
@@ -253,6 +276,9 @@ RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1 bin/rastercast.sh "https://www.youtube.com/p
 `RASTERCAST_VIDEO_EFFECT` defaults to `none`; available effects are `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, and `scanwarp`. Multiple effects can be layered with commas; order matters.
 `RASTERCAST_VIDEO_SPEED` changes video and audio speed together. `RASTERCAST_AUDIO_EFFECT` can add `echo`, `robot`, `radio`, `deep`, or `chipmunk` processing.
 `RASTERCAST_VISUALIZER` replaces the source video with ffmpeg-generated visuals from the audio stream.
+`RASTERCAST_CAPTURE_WINDOW` replaces the source video with a live X11 window capture and keeps the input audio. It cannot be combined with `RASTERCAST_VISUALIZER`. On Wayland, this works only when the target app is visible through XWayland/X11 capture.
+`RASTERCAST_AUDIO_MONITOR=pulse` sends the same source audio to the local PulseAudio/PipeWire default sink while streaming. This is intended for monitor-based visualizers; the QMMP ProjectM plugin only reacts to audio QMMP itself is playing.
+`RASTERCAST_STREAM_AUDIO_DELAY_MS` compensates for the local audio-to-visualizer-to-window-capture path by delaying only the audio in the MiSTer stream. Start around `200` to `500` ms when using `RASTERCAST_CAPTURE_WINDOW` with `RASTERCAST_AUDIO_MONITOR=pulse`.
 
 Age-restricted YouTube videos require authenticated cookies. Use `RASTERCAST_YTDLP_COOKIES_FROM_BROWSER` with a browser profile that is signed in to YouTube, or export cookies and pass the file with `RASTERCAST_YTDLP_COOKIES`.
 If YouTube signature solving fails, set `RASTERCAST_YTDLP_JS_RUNTIME=node`; newer `yt-dlp` builds may also need `RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github`.
@@ -262,6 +288,7 @@ If MiSTer reports `Cache empty`, increase the player cache or reduce bitrate:
 
 ```bash
 RASTERCAST_CACHE_KB=16384 RASTERCAST_CACHE_MIN=20 /media/fat/Scripts/rastercast.sh "http://pc-host:8090/stream.ts"
+RASTERCAST_CACHE_KB=2048 RASTERCAST_CACHE_MIN=1 RASTERCAST_MPLAYER_AUTOSYNC=30 RASTERCAST_MPLAYER_FRAMEDROP=1 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_BITRATE=700k bin/rastercast.sh /path/to/video.mkv
 ```
 

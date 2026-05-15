@@ -22,6 +22,12 @@ Environment:
   RASTERCAST_VIDEO_EFFECT  Comma-separated video effects, or none
   RASTERCAST_VIDEO_SPEED  Playback speed multiplier, from 0.5 to 2.0 (default: 1)
   RASTERCAST_VISUALIZER  Replace video with audio visualizer: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits
+  RASTERCAST_CAPTURE_WINDOW  X11 window id to capture as video, e.g. 0x1a00021
+  RASTERCAST_CAPTURE_DISPLAY  X11 display to capture from (default: DISPLAY)
+  RASTERCAST_CAPTURE_FPS  X11 capture frame rate (default: 30)
+  RASTERCAST_AUDIO_MONITOR  Also play source audio locally: none, pulse (default: none)
+  RASTERCAST_AUDIO_MONITOR_SINK  Local PulseAudio/PipeWire sink (default: default)
+  RASTERCAST_STREAM_AUDIO_DELAY_MS  Delay streamed audio only, for captured visualizer sync (default: 0)
   RASTERCAST_AUDIO_EFFECT  Audio effect: none, echo, robot, radio, deep, chipmunk
   RASTERCAST_YTDLP       Force yt-dlp for URL input: 1 or 0 (default: auto)
   RASTERCAST_YTDLP_FORMAT  yt-dlp format for URL inputs (default: progressive <=480p)
@@ -117,6 +123,12 @@ load_config() {
   video_effect=${RASTERCAST_VIDEO_EFFECT:-none}
   video_speed=${RASTERCAST_VIDEO_SPEED:-1}
   visualizer=${RASTERCAST_VISUALIZER:-none}
+  capture_window=${RASTERCAST_CAPTURE_WINDOW:-}
+  capture_display=${RASTERCAST_CAPTURE_DISPLAY:-${DISPLAY:-}}
+  capture_fps=${RASTERCAST_CAPTURE_FPS:-30}
+  audio_monitor=${RASTERCAST_AUDIO_MONITOR:-none}
+  audio_monitor_sink=${RASTERCAST_AUDIO_MONITOR_SINK:-default}
+  stream_audio_delay_ms=${RASTERCAST_STREAM_AUDIO_DELAY_MS:-0}
   audio_effect=${RASTERCAST_AUDIO_EFFECT:-none}
   ytdlp_format=${RASTERCAST_YTDLP_FORMAT:-best[height<=480][protocol^=http][vcodec!=none][acodec!=none]/best[protocol^=http][vcodec!=none][acodec!=none]/best[height<=480][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]}
   ytdlp_cookies=${RASTERCAST_YTDLP_COOKIES:-}
@@ -224,6 +236,25 @@ validate_config() {
       ;;
   esac
 
+  if [[ -n "$capture_window" ]]; then
+    if [[ "$visualizer" != "none" ]]; then
+      printf 'error: RASTERCAST_CAPTURE_WINDOW cannot be combined with RASTERCAST_VISUALIZER\n' >&2
+      exit 1
+    fi
+    if [[ ! "$capture_window" =~ ^(0x[0-9a-fA-F]+|[1-9][0-9]*)$ ]]; then
+      printf 'error: RASTERCAST_CAPTURE_WINDOW must be an X11 window id, e.g. 0x1a00021\n' >&2
+      exit 1
+    fi
+    if [[ -z "$capture_display" ]]; then
+      printf 'error: RASTERCAST_CAPTURE_WINDOW requires DISPLAY or RASTERCAST_CAPTURE_DISPLAY\n' >&2
+      exit 1
+    fi
+    if [[ ! "$capture_fps" =~ ^([1-9][0-9]*|[1-9][0-9]*/[1-9][0-9]*)$ ]]; then
+      printf 'error: RASTERCAST_CAPTURE_FPS must be a frame rate, e.g. 30 or 30000/1001\n' >&2
+      exit 1
+    fi
+  fi
+
   case "$audio_effect" in
     none | echo | robot | radio | deep | chipmunk)
       ;;
@@ -235,6 +266,20 @@ validate_config() {
 
   if ! awk -v speed="$video_speed" 'BEGIN { exit !(speed + 0 == speed && speed >= 0.5 && speed <= 2.0) }'; then
     printf 'error: RASTERCAST_VIDEO_SPEED must be a number from 0.5 to 2.0\n' >&2
+    exit 1
+  fi
+
+  case "$audio_monitor" in
+    none | pulse)
+      ;;
+    *)
+      printf 'error: RASTERCAST_AUDIO_MONITOR must be one of: none, pulse\n' >&2
+      exit 1
+      ;;
+  esac
+
+  if [[ ! "$stream_audio_delay_ms" =~ ^[0-9]+$ ]]; then
+    printf 'error: RASTERCAST_STREAM_AUDIO_DELAY_MS must be a non-negative integer\n' >&2
     exit 1
   fi
 
@@ -371,10 +416,10 @@ build_video_filter() {
 }
 
 build_audio_filter() {
+  audio_filter=""
+
   if [[ "$video_speed" != "1" && "$video_speed" != "1.0" ]]; then
-    audio_filter="atempo=${video_speed}"
-  else
-    audio_filter=""
+    audio_filter="${audio_filter:+${audio_filter},}atempo=${video_speed}"
   fi
 
   case "$audio_effect" in
@@ -396,6 +441,14 @@ build_audio_filter() {
       audio_filter="${audio_filter:+${audio_filter},}asetrate=44100*1.25,aresample=44100,atempo=0.8"
       ;;
   esac
+}
+
+build_stream_audio_filter() {
+  stream_audio_filter="$audio_filter"
+
+  if [[ "$stream_audio_delay_ms" != "0" ]]; then
+    stream_audio_filter="${stream_audio_filter:+${stream_audio_filter},}adelay=${stream_audio_delay_ms}:all=1"
+  fi
 }
 
 visualizer_filter() {
@@ -453,7 +506,9 @@ build_ffmpeg_output_args() {
     "$stream_path"
   )
 
-  if [[ "$visualizer" == "none" ]]; then
+  if [[ -n "$capture_window" ]]; then
+    ffmpeg_output_args=(-map 1:v:0 -map 0:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
+  elif [[ "$visualizer" == "none" ]]; then
     ffmpeg_output_args=(-map 0:v:0 -map 0:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
   else
     local effect
@@ -475,9 +530,28 @@ build_ffmpeg_output_args() {
     ffmpeg_output_args=(-filter_complex "[0:a]${viz_filter}[v]" -map "[v]" -map 0:a:0 "${ffmpeg_output_args[@]}")
   fi
 
-  if [[ -n "$audio_filter" ]]; then
-    ffmpeg_output_args=(-af "$audio_filter" "${ffmpeg_output_args[@]}")
+  if [[ -n "$stream_audio_filter" ]]; then
+    ffmpeg_output_args=(-af "$stream_audio_filter" "${ffmpeg_output_args[@]}")
   fi
+}
+
+build_ffmpeg_monitor_output_args() {
+  ffmpeg_monitor_output_args=()
+
+  if [[ "$audio_monitor" == "none" ]]; then
+    return
+  fi
+
+  ffmpeg_monitor_output_args=(-map 0:a? -vn)
+  if [[ -n "$audio_filter" ]]; then
+    ffmpeg_monitor_output_args+=(-af "$audio_filter")
+  fi
+
+  case "$audio_monitor" in
+    pulse)
+      ffmpeg_monitor_output_args+=(-f pulse "$audio_monitor_sink")
+      ;;
+  esac
 }
 
 build_ytdlp_args() {
@@ -574,6 +648,11 @@ concat_escape() {
   printf "file '%s'\n" "$value"
 }
 
+shell_quote() {
+  local value=${1//\'/\'\\\'\'}
+  printf "'%s'" "$value"
+}
+
 write_concat_list() {
   local expanded_items=()
   local item
@@ -663,6 +742,11 @@ copy_mister_script() {
 }
 
 launch_mister() {
+  local playback_cmd
+  local remote_env=()
+  local var
+  local value
+
   case "$mister_auto" in
     1 | yes | true)
       ;;
@@ -701,7 +785,24 @@ launch_mister() {
   esac
 
   printf 'rastercast: launching MiSTer playback on %s@%s\n' "$mister_user" "$mister_host" >&2
-  run_mister_playback "chmod +x '$mister_script' && exec '$mister_script' '$stream_url'"
+  for var in \
+    RASTERCAST_CACHE_KB \
+    RASTERCAST_CACHE_MIN \
+    RASTERCAST_MPLAYER_VO \
+    RASTERCAST_MPLAYER_AUTOSYNC \
+    RASTERCAST_MPLAYER_FRAMEDROP; do
+    value=${!var-}
+    if [[ -n "$value" ]]; then
+      remote_env+=("${var}=$(shell_quote "$value")")
+    fi
+  done
+
+  playback_cmd="chmod +x $(shell_quote "$mister_script") &&"
+  if [[ ${#remote_env[@]} -gt 0 ]]; then
+    playback_cmd+=" ${remote_env[*]}"
+  fi
+  playback_cmd+=" exec $(shell_quote "$mister_script") $(shell_quote "$stream_url")"
+  run_mister_playback "$playback_cmd"
 }
 
 # Process lifecycle
@@ -742,10 +843,13 @@ start_server() {
 start_ffmpeg() {
   local audio_filter
   local ffmpeg_output_args
+  local ffmpeg_monitor_output_args
+  local stream_audio_filter
   local video_filter
 
   build_video_filter
   build_audio_filter
+  build_stream_audio_filter
 
   local ffmpeg_args=(
     -hide_banner
@@ -755,14 +859,31 @@ start_ffmpeg() {
     -fflags +genpts
   )
   build_ffmpeg_output_args
+  build_ffmpeg_monitor_output_args
 
   write_concat_list
-  ffmpeg "${ffmpeg_args[@]}" \
-    -f concat \
-    -safe 0 \
-    -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
-    -i "$concat_list" \
-    "${ffmpeg_output_args[@]}" >"${ffmpeg_log}" 2>&1 &
+  if [[ -n "$capture_window" ]]; then
+    ffmpeg "${ffmpeg_args[@]}" \
+      -f concat \
+      -safe 0 \
+      -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+      -i "$concat_list" \
+      -thread_queue_size 512 \
+      -f x11grab \
+      -framerate "$capture_fps" \
+      -window_id "$capture_window" \
+      -i "$capture_display" \
+      "${ffmpeg_monitor_output_args[@]}" \
+      "${ffmpeg_output_args[@]}" >"${ffmpeg_log}" 2>&1 &
+  else
+    ffmpeg "${ffmpeg_args[@]}" \
+      -f concat \
+      -safe 0 \
+      -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+      -i "$concat_list" \
+      "${ffmpeg_monitor_output_args[@]}" \
+      "${ffmpeg_output_args[@]}" >"${ffmpeg_log}" 2>&1 &
+  fi
   ffmpeg_pid=$!
 }
 
