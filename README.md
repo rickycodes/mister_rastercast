@@ -200,6 +200,7 @@ Video output:
 - `RASTERCAST_VIDEO_SPEED` sets playback speed from `0.5` to `2.0`, default `1`.
 - `RASTERCAST_VISUALIZER` replaces source video with an audio visualizer: `none`, `waves`, `spectrum`, `cqt`, `vectorscope`, `freqs`, `spatial`, `histogram`, `bits`, or `projectm`; default `none`.
 - `RASTERCAST_PROJECTM` sets the ProjectM helper path when `RASTERCAST_VISUALIZER=projectm`; default `~/projects/rastercast-projectm/rastercast-projectm`.
+- `RASTERCAST_PROJECTM_PRESETS` sets the ProjectM preset directory; default `/usr/share/projectM/presets`.
 - `RASTERCAST_PROJECTM_FPS` sets the ProjectM helper frame rate; default is `RASTERCAST_FPS` or `30`.
 - `RASTERCAST_PROJECTM_QUEUE_SIZE` sets ffmpeg queue size for ProjectM pipes; default `1024`.
 - `RASTERCAST_CAPTURE_WINDOW` captures an X11 window id as video while the input supplies audio, for example `0x1a00021`; default unset.
@@ -259,6 +260,7 @@ RASTERCAST_VISUALIZER=vectorscope bin/rastercast.sh "https://www.youtube.com/wat
 RASTERCAST_VISUALIZER=spatial bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=bits bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=projectm RASTERCAST_FPS=30 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_VISUALIZER=projectm RASTERCAST_PROJECTM_PRESETS=/usr/share/projectM/presets bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=projectm RASTERCAST_PROJECTM_QUEUE_SIZE=2048 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_CAPTURE_WINDOW=0x1a00021 RASTERCAST_VIDEO_SIZE=512x240 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_AUDIO_MONITOR=pulse RASTERCAST_CAPTURE_WINDOW=0x1a00021 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"

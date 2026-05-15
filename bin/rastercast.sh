@@ -23,6 +23,7 @@ Environment:
   RASTERCAST_VIDEO_SPEED  Playback speed multiplier, from 0.5 to 2.0 (default: 1)
   RASTERCAST_VISUALIZER  Replace video with audio visualizer: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits, projectm
   RASTERCAST_PROJECTM    projectM helper path (default: ~/projects/rastercast-projectm/rastercast-projectm)
+  RASTERCAST_PROJECTM_PRESETS  projectM preset directory (default: /usr/share/projectM/presets)
   RASTERCAST_PROJECTM_FPS  projectM helper FPS (default: RASTERCAST_FPS or 30)
   RASTERCAST_PROJECTM_QUEUE_SIZE  ffmpeg queue size for projectM pipes (default: 1024)
   RASTERCAST_CAPTURE_WINDOW  X11 window id to capture as video, e.g. 0x1a00021
@@ -127,6 +128,7 @@ load_config() {
   video_speed=${RASTERCAST_VIDEO_SPEED:-1}
   visualizer=${RASTERCAST_VISUALIZER:-none}
   projectm_bin=${RASTERCAST_PROJECTM:-${HOME}/projects/rastercast-projectm/rastercast-projectm}
+  projectm_presets=${RASTERCAST_PROJECTM_PRESETS:-/usr/share/projectM/presets}
   projectm_fps=${RASTERCAST_PROJECTM_FPS:-${output_fps:-30}}
   projectm_queue_size=${RASTERCAST_PROJECTM_QUEUE_SIZE:-1024}
   capture_window=${RASTERCAST_CAPTURE_WINDOW:-}
@@ -257,6 +259,10 @@ validate_config() {
     fi
     if [[ ! -x "$projectm_bin" ]]; then
       printf 'error: RASTERCAST_PROJECTM helper not executable: %s\n' "$projectm_bin" >&2
+      exit 1
+    fi
+    if [[ ! -d "$projectm_presets" ]]; then
+      printf 'error: RASTERCAST_PROJECTM_PRESETS directory not found: %s\n' "$projectm_presets" >&2
       exit 1
     fi
     if [[ ! "$projectm_fps" =~ ^[1-9][0-9]*$ ]]; then
@@ -891,6 +897,7 @@ start_projectm_pipeline() {
   RASTERCAST_PROJECTM_WIDTH="$video_width" \
     RASTERCAST_PROJECTM_HEIGHT="$video_height" \
     RASTERCAST_PROJECTM_FPS="$projectm_fps" \
+    RASTERCAST_PROJECTM_PRESETS="$projectm_presets" \
     "$projectm_bin" --raw-video <"$projectm_pcm_pipe" >"$projectm_video_pipe" 2>>"${ffmpeg_log}" &
   projectm_pid=$!
 
