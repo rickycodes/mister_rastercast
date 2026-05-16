@@ -123,18 +123,6 @@ Direct HTTP(S) media URLs are passed to `ffmpeg` without `yt-dlp`:
 bin/rastercast.sh "https://pc-host/video.mp4"
 ```
 
-### X11 Window Capture
-
-Use an X11 window as the video source while the input file or URL supplies audio:
-
-```bash
-RASTERCAST_CAPTURE_WINDOW=0x1a00021 \
-RASTERCAST_VIDEO_SIZE=512x240 \
-bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
-```
-
-This can capture a ProjectM window for MilkDrop-style visuals. Find the window id with `xwininfo`, then click the ProjectM window.
-
 That command:
 
 - creates a temporary MPEG-TS stream
@@ -208,12 +196,6 @@ Video output:
 - `RASTERCAST_PROJECTM_PRESET` locks ProjectM to one preset file; default unset.
 - `RASTERCAST_PROJECTM_FPS` sets the ProjectM helper frame rate; default is `RASTERCAST_FPS` or `30`.
 - `RASTERCAST_PROJECTM_QUEUE_SIZE` sets ffmpeg queue size for ProjectM pipes; default `1024`.
-- `RASTERCAST_CAPTURE_WINDOW` captures an X11 window id as video while the input supplies audio, for example `0x1a00021`; default unset.
-- `RASTERCAST_CAPTURE_DISPLAY` sets the X11 display for capture; default is `DISPLAY`.
-- `RASTERCAST_CAPTURE_FPS` sets the X11 capture frame rate, default `30`.
-- `RASTERCAST_AUDIO_MONITOR` also plays source audio locally for monitor-based visualizers: `none` or `pulse`; default `none`.
-- `RASTERCAST_AUDIO_MONITOR_SINK` sets the local PulseAudio/PipeWire sink when audio monitoring is enabled; default `default`.
-- `RASTERCAST_STREAM_AUDIO_DELAY_MS` delays the streamed audio only, useful for lining up captured visualizer video; default `0`.
 - `RASTERCAST_AUDIO_EFFECT` sets an audio effect preset: `none`, `echo`, `robot`, `radio`, `deep`, or `chipmunk`; default `none`.
 
 YouTube and other `yt-dlp` inputs:
@@ -270,9 +252,6 @@ RASTERCAST_VISUALIZER=projectm RASTERCAST_FPS=30 bin/rastercast.sh "https://www.
 RASTERCAST_VISUALIZER=projectm RASTERCAST_PROJECTM_PRESETS=/usr/share/projectM/presets bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=projectm RASTERCAST_PROJECTM_PRESET="/usr/share/projectM/presets/Geiss - Swirlie 2.milk" bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=projectm RASTERCAST_PROJECTM_QUEUE_SIZE=2048 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
-RASTERCAST_CAPTURE_WINDOW=0x1a00021 RASTERCAST_VIDEO_SIZE=512x240 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
-RASTERCAST_AUDIO_MONITOR=pulse RASTERCAST_CAPTURE_WINDOW=0x1a00021 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
-RASTERCAST_STREAM_AUDIO_DELAY_MS=300 RASTERCAST_AUDIO_MONITOR=pulse RASTERCAST_CAPTURE_WINDOW=0x1a00021 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_AUDIO_EFFECT=echo bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_AUDIO_EFFECT=radio bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP=1 bin/rastercast.sh "https://example.com/video-page"
@@ -288,12 +267,9 @@ RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1 bin/rastercast.sh "https://www.youtube.com/p
 
 `RASTERCAST_VIDEO_FIT=auto` is the default. It uses letterboxing for local files and direct media URLs, but center-crops `yt-dlp` inputs to fill the 320x240 CRT frame.
 `RASTERCAST_VIDEO_SIZE` changes the PC-side stream size. MiSTer video mode and BVM support still need to match the resolution you choose. `RASTERCAST_DISPLAY_ASPECT=4:3` can correct geometry when a wide 240p mode like `512x240` is displayed as a 4:3 raster.
-`RASTERCAST_VIDEO_EFFECT` defaults to `none`; available effects are `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, and `scanwarp`. Multiple effects can be layered with commas; order matters.
+`RASTERCAST_VIDEO_EFFECT` defaults to `none`; available effects are `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, `scanwarp`, `avs-feedback`, `avs-grid`, `avs-crt`, and `avs-neon`. Multiple effects can be layered with commas; order matters.
 `RASTERCAST_VIDEO_SPEED` changes video and audio speed together. `RASTERCAST_AUDIO_EFFECT` can add `echo`, `robot`, `radio`, `deep`, or `chipmunk` processing.
 `RASTERCAST_VISUALIZER` replaces the source video with generated visuals from the audio stream. The built-in ffmpeg visualizers run inside ffmpeg. `RASTERCAST_VISUALIZER=projectm` uses the external `rastercast-projectm` helper to render MilkDrop/projectM frames from raw PCM and feed them back into the stream.
-`RASTERCAST_CAPTURE_WINDOW` replaces the source video with a live X11 window capture and keeps the input audio. It cannot be combined with `RASTERCAST_VISUALIZER`. On Wayland, this works only when the target app is visible through XWayland/X11 capture.
-`RASTERCAST_AUDIO_MONITOR=pulse` sends the same source audio to the local PulseAudio/PipeWire default sink while streaming. This is intended for monitor-based visualizers; the QMMP ProjectM plugin only reacts to audio QMMP itself is playing.
-`RASTERCAST_STREAM_AUDIO_DELAY_MS` compensates for the local audio-to-visualizer-to-window-capture path by delaying only the audio in the MiSTer stream. Start around `200` to `500` ms when using `RASTERCAST_CAPTURE_WINDOW` with `RASTERCAST_AUDIO_MONITOR=pulse`.
 
 Age-restricted YouTube videos require authenticated cookies. Use `RASTERCAST_YTDLP_COOKIES_FROM_BROWSER` with a browser profile that is signed in to YouTube, or export cookies and pass the file with `RASTERCAST_YTDLP_COOKIES`.
 If YouTube signature solving fails, set `RASTERCAST_YTDLP_JS_RUNTIME=node`; newer `yt-dlp` builds may also need `RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github`.
