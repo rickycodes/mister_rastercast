@@ -92,6 +92,17 @@ elif [[ -x "${mrsampath}/mbc" ]]; then
   "${mrsampath}/mbc" raw_seq :43 || true
 fi
 
+restore_menu() {
+  if [[ -w /dev/tty1 ]]; then
+    printf '\033[2J\033[H' > /dev/tty1 2>/dev/null || true
+  fi
+  if [[ -w /dev/MiSTer_cmd ]]; then
+    printf '%s\n' 'load_core /media/fat/menu.rbf' > /dev/MiSTer_cmd
+  fi
+}
+
+trap restore_menu EXIT INT TERM
+
 cache_kb=${RASTERCAST_CACHE_KB:-8192}
 cache_min=${RASTERCAST_CACHE_MIN:-10}
 mplayer_autosync=${RASTERCAST_MPLAYER_AUTOSYNC:-}
