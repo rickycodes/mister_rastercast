@@ -20,6 +20,10 @@ Environment:
   RASTERCAST_DISPLAY_ASPECT  Display aspect ratio, e.g. 4:3 (default: auto)
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
   RASTERCAST_VIDEO_EFFECT  Comma-separated video effects, or none
+  RASTERCAST_WATERMARK_TEXT  Text watermark drawn at bottom right
+  RASTERCAST_WATERMARK_SIZE  Text watermark font size (default: 18)
+  RASTERCAST_WATERMARK_MARGIN  Text watermark edge margin (default: 8)
+  RASTERCAST_WATERMARK_OPACITY  Text watermark opacity from 0.0 to 1.0 (default: 0.65)
   RASTERCAST_VIDEO_SPEED  Playback speed multiplier, from 0.5 to 2.0 (default: 1)
   RASTERCAST_VISUALIZER  Replace video with audio visualizer: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits, projectm
   RASTERCAST_PROJECTM    projectM helper path (default: ~/projects/rastercast-projectm/rastercast-projectm)
@@ -49,6 +53,7 @@ Environment:
   RASTERCAST_MISTER_SCRIPT  MiSTer script path (default: /media/fat/Scripts/rastercast.sh)
   RASTERCAST_MISTER_DEPLOY  Deploy MiSTer script when missing: auto, always, never (default: auto)
   RASTERCAST_MISTER_TTY  Allocate TTY for remote playback controls: 1 or 0 (default: 1)
+  RASTERCAST_MISTER_DETACH  Start remote playback detached from SSH: 1 or 0 (default: 0)
 EOF
 }
 
@@ -126,6 +131,10 @@ load_config() {
   display_aspect=${RASTERCAST_DISPLAY_ASPECT:-auto}
   video_fit=${RASTERCAST_VIDEO_FIT:-auto}
   video_effect=${RASTERCAST_VIDEO_EFFECT:-none}
+  watermark_text=${RASTERCAST_WATERMARK_TEXT:-}
+  watermark_size=${RASTERCAST_WATERMARK_SIZE:-18}
+  watermark_margin=${RASTERCAST_WATERMARK_MARGIN:-8}
+  watermark_opacity=${RASTERCAST_WATERMARK_OPACITY:-0.65}
   video_speed=${RASTERCAST_VIDEO_SPEED:-1}
   visualizer=${RASTERCAST_VISUALIZER:-none}
   projectm_bin=${RASTERCAST_PROJECTM:-${HOME}/projects/rastercast-projectm/rastercast-projectm}
@@ -155,6 +164,7 @@ load_config() {
   mister_script=${RASTERCAST_MISTER_SCRIPT:-/media/fat/Scripts/rastercast.sh}
   mister_deploy=${RASTERCAST_MISTER_DEPLOY:-auto}
   mister_tty=${RASTERCAST_MISTER_TTY:-1}
+  mister_detach=${RASTERCAST_MISTER_DETACH:-0}
 
   host_ip=${RASTERCAST_HOST_IP:-}
 }
@@ -185,7 +195,13 @@ prepare_workdir() {
   projectm_video_pipe="${workdir}/projectm.rgb"
   stream_url="http://${host_ip}:${port}/stream.ts"
   ssh_control_path="${workdir}/ssh-control-%r@%h:%p"
-  ssh_opts=(-o ControlMaster=auto -o ControlPersist=60 -o "ControlPath=${ssh_control_path}")
+  ssh_opts=(
+    -o ControlMaster=auto
+    -o ControlPersist=60
+    -o ServerAliveInterval=15
+    -o ServerAliveCountMax=3
+    -o "ControlPath=${ssh_control_path}"
+  )
   mister_ssh_used=""
 }
 
@@ -203,6 +219,7 @@ validate_config() {
   esac
 
   validate_bool RASTERCAST_QUEUE_SKIP_UNAVAILABLE "$queue_skip_unavailable"
+  validate_bool RASTERCAST_MISTER_DETACH "$mister_detach"
 
   case "$video_fit" in
     auto | contain | cover)
@@ -240,6 +257,21 @@ validate_config() {
   fit_height=$((fit_height / 2 * 2))
 
   validate_video_effects
+
+  if [[ -n "$watermark_text" ]]; then
+    if [[ ! "$watermark_size" =~ ^[1-9][0-9]*$ ]]; then
+      printf 'error: RASTERCAST_WATERMARK_SIZE must be a positive integer\n' >&2
+      exit 1
+    fi
+    if [[ ! "$watermark_margin" =~ ^[0-9]+$ ]]; then
+      printf 'error: RASTERCAST_WATERMARK_MARGIN must be a non-negative integer\n' >&2
+      exit 1
+    fi
+    if ! awk -v opacity="$watermark_opacity" 'BEGIN { exit !(opacity + 0 == opacity && opacity >= 0 && opacity <= 1) }'; then
+      printf 'error: RASTERCAST_WATERMARK_OPACITY must be a number from 0.0 to 1.0\n' >&2
+      exit 1
+    fi
+  fi
 
   case "$visualizer" in
     none | waves | spectrum | cqt | vectorscope | freqs | spatial | histogram | bits | projectm)
@@ -441,6 +473,26 @@ append_video_effects() {
   done
 }
 
+drawtext_escape() {
+  local value=$1
+  value=${value//\\/\\\\}
+  value=${value//:/\\:}
+  value=${value//\'/\\\'}
+  value=${value//,/\\,}
+  printf '%s\n' "$value"
+}
+
+append_watermark() {
+  local escaped_text
+
+  if [[ -z "$watermark_text" ]]; then
+    return
+  fi
+
+  escaped_text=$(drawtext_escape "$watermark_text")
+  video_filter="${video_filter},drawtext=text='${escaped_text}':x=w-tw-${watermark_margin}:y=h-th-${watermark_margin}:fontsize=${watermark_size}:fontcolor=white@${watermark_opacity}:box=1:boxcolor=black@0.28:boxborderw=3"
+}
+
 build_video_filter() {
   local fit="$video_fit"
 
@@ -462,6 +514,7 @@ build_video_filter() {
   esac
 
   append_video_effects
+  append_watermark
 
   if [[ -n "$output_fps" ]]; then
     video_filter="${video_filter},fps=${output_fps}"
@@ -580,6 +633,9 @@ build_ffmpeg_output_args() {
         viz_filter="${viz_filter},${effect_filter}"
       fi
     done
+    video_filter="$viz_filter"
+    append_watermark
+    viz_filter="$video_filter"
     if [[ -n "$output_fps" ]]; then
       viz_filter="${viz_filter},fps=${output_fps}"
     fi
@@ -861,7 +917,11 @@ launch_mister() {
     playback_cmd+=" ${remote_env[*]}"
   fi
   playback_cmd+=" exec $(shell_quote "$mister_script") $(shell_quote "$stream_url")"
-  run_mister_playback "$playback_cmd"
+  if is_enabled "$mister_detach"; then
+    run_mister_ssh "nohup sh -c $(shell_quote "$playback_cmd") >/tmp/rastercast.log 2>&1 </dev/null &"
+  else
+    run_mister_playback "$playback_cmd"
+  fi
 }
 
 # Process lifecycle

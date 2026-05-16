@@ -197,6 +197,10 @@ Video output:
 - `RASTERCAST_FPS` optionally forces output FPS, for example `30000/1001`.
 - `RASTERCAST_VIDEO_FIT` sets sizing: `auto`, `contain`, or `cover`; default `auto`.
 - `RASTERCAST_VIDEO_EFFECT` sets comma-separated effect presets: `none`, `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, `scanwarp`, `avs-feedback`, `avs-grid`, `avs-crt`, or `avs-neon`; default `none`.
+- `RASTERCAST_WATERMARK_TEXT` draws a text watermark in the lower right; default unset.
+- `RASTERCAST_WATERMARK_SIZE` sets watermark font size; default `18`.
+- `RASTERCAST_WATERMARK_MARGIN` sets watermark edge margin; default `8`.
+- `RASTERCAST_WATERMARK_OPACITY` sets watermark opacity from `0.0` to `1.0`; default `0.65`.
 - `RASTERCAST_VIDEO_SPEED` sets playback speed from `0.5` to `2.0`, default `1`.
 - `RASTERCAST_VISUALIZER` replaces source video with an audio visualizer: `none`, `waves`, `spectrum`, `cqt`, `vectorscope`, `freqs`, `spatial`, `histogram`, `bits`, or `projectm`; default `none`.
 - `RASTERCAST_PROJECTM` sets the ProjectM helper path when `RASTERCAST_VISUALIZER=projectm`; default `~/projects/rastercast-projectm/rastercast-projectm`.
@@ -231,6 +235,7 @@ MiSTer auto-launch:
 - `RASTERCAST_MISTER_SCRIPT` sets the remote script path, default `/media/fat/Scripts/rastercast.sh`.
 - `RASTERCAST_MISTER_DEPLOY` controls script deployment: `auto`, `always`, or `never`; default `auto`.
 - `RASTERCAST_MISTER_TTY` controls whether playback gets an interactive TTY: `1` or `0`; default `1`.
+- `RASTERCAST_MISTER_DETACH` starts MiSTer playback with `nohup` and lets SSH close immediately: `1` or `0`; default `0`.
 
 MiSTer playback:
 
@@ -255,6 +260,7 @@ RASTERCAST_VIDEO_EFFECT=matrix bin/rastercast.sh "https://www.youtube.com/watch?
 RASTERCAST_VIDEO_EFFECT=wobble bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_EFFECT=scanwarp bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_EFFECT=matrix,scanwarp,trails bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_WATERMARK_TEXT=MUCH bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_SPEED=0.75 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=spectrum bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=vectorscope bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
