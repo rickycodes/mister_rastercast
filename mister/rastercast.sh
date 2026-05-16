@@ -16,6 +16,8 @@ Environment:
   RASTERCAST_MPLAYER_VO  Optional mplayer video output, e.g. fbdev or fbdev2
   RASTERCAST_CACHE_KB    MPlayer cache size in KiB (default: 8192)
   RASTERCAST_CACHE_MIN   Percent cache fill before playback starts (default: 10)
+  RASTERCAST_MPLAYER_AUTOSYNC  Optional mplayer -autosync value, e.g. 30
+  RASTERCAST_MPLAYER_FRAMEDROP  Enable mplayer -framedrop: 1 or 0 (default: 0)
 EOF
 }
 
@@ -92,11 +94,27 @@ fi
 
 cache_kb=${RASTERCAST_CACHE_KB:-8192}
 cache_min=${RASTERCAST_CACHE_MIN:-10}
+mplayer_autosync=${RASTERCAST_MPLAYER_AUTOSYNC:-}
+mplayer_framedrop=${RASTERCAST_MPLAYER_FRAMEDROP:-0}
 
 mplayer_args=(-fs -cache "$cache_kb" -cache-min "$cache_min")
 if [[ -n "${RASTERCAST_MPLAYER_VO:-}" ]]; then
   mplayer_args=(-vo "$RASTERCAST_MPLAYER_VO" "${mplayer_args[@]}")
 fi
+if [[ -n "$mplayer_autosync" ]]; then
+  mplayer_args=(-autosync "$mplayer_autosync" "${mplayer_args[@]}")
+fi
+case "$mplayer_framedrop" in
+  1 | yes | true)
+    mplayer_args=(-framedrop "${mplayer_args[@]}")
+    ;;
+  0 | no | false)
+    ;;
+  *)
+    printf 'error: RASTERCAST_MPLAYER_FRAMEDROP must be 1 or 0\n' >&2
+    exit 1
+    ;;
+esac
 mplayer_args+=("$stream_url")
 
 nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"

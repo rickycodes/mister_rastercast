@@ -184,9 +184,18 @@ Video output:
 - `RASTERCAST_DISPLAY_ASPECT` sets the intended display shape, for example `4:3`; default `auto`.
 - `RASTERCAST_FPS` optionally forces output FPS, for example `30000/1001`.
 - `RASTERCAST_VIDEO_FIT` sets sizing: `auto`, `contain`, or `cover`; default `auto`.
-- `RASTERCAST_VIDEO_EFFECT` sets comma-separated effect presets: `none`, `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, or `scanwarp`; default `none`.
+- `RASTERCAST_VIDEO_EFFECT` sets comma-separated effect presets: `none`, `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, `scanwarp`, `avs-feedback`, `avs-grid`, `avs-crt`, or `avs-neon`; default `none`.
+- `RASTERCAST_WATERMARK_TEXT` draws a text watermark in the lower right; default unset.
+- `RASTERCAST_WATERMARK_SIZE` sets watermark font size; default `18`.
+- `RASTERCAST_WATERMARK_MARGIN` sets watermark edge margin; default `8`.
+- `RASTERCAST_WATERMARK_OPACITY` sets watermark opacity from `0.0` to `1.0`; default `0.65`.
 - `RASTERCAST_VIDEO_SPEED` sets playback speed from `0.5` to `2.0`, default `1`.
-- `RASTERCAST_VISUALIZER` replaces source video with an audio visualizer: `none`, `waves`, `spectrum`, `cqt`, `vectorscope`, `freqs`, `spatial`, `histogram`, or `bits`; default `none`.
+- `RASTERCAST_VISUALIZER` replaces source video with an audio visualizer: `none`, `waves`, `spectrum`, `cqt`, `vectorscope`, `freqs`, `spatial`, `histogram`, `bits`, or `projectm`; default `none`.
+- `RASTERCAST_PROJECTM` sets the ProjectM helper path when `RASTERCAST_VISUALIZER=projectm`; default `~/projects/rastercast-projectm/rastercast-projectm`.
+- `RASTERCAST_PROJECTM_PRESETS` sets the ProjectM preset directory; default `/usr/share/projectM/presets`.
+- `RASTERCAST_PROJECTM_PRESET` locks ProjectM to one preset file; default unset.
+- `RASTERCAST_PROJECTM_FPS` sets the ProjectM helper frame rate; default is `RASTERCAST_FPS` or `30`.
+- `RASTERCAST_PROJECTM_QUEUE_SIZE` sets ffmpeg queue size for ProjectM pipes; default `1024`.
 - `RASTERCAST_AUDIO_EFFECT` sets an audio effect preset: `none`, `echo`, `robot`, `radio`, `deep`, or `chipmunk`; default `none`.
 
 YouTube and other `yt-dlp` inputs:
@@ -208,12 +217,15 @@ MiSTer auto-launch:
 - `RASTERCAST_MISTER_SCRIPT` sets the remote script path, default `/media/fat/Scripts/rastercast.sh`.
 - `RASTERCAST_MISTER_DEPLOY` controls script deployment: `auto`, `always`, or `never`; default `auto`.
 - `RASTERCAST_MISTER_TTY` controls whether playback gets an interactive TTY: `1` or `0`; default `1`.
+- `RASTERCAST_MISTER_DETACH` starts MiSTer playback with `nohup` and lets SSH close immediately: `1` or `0`; default `0`.
 
 MiSTer playback:
 
 - `RASTERCAST_MPLAYER_VO` optionally sets the `mplayer` video output, for example `fbdev` or `fbdev2`.
 - `RASTERCAST_CACHE_KB` sets the `mplayer` cache size in KiB, default `8192`.
 - `RASTERCAST_CACHE_MIN` sets the percent cache fill before playback starts, default `10`.
+- `RASTERCAST_MPLAYER_AUTOSYNC` optionally sets `mplayer -autosync`, for example `30`.
+- `RASTERCAST_MPLAYER_FRAMEDROP` enables `mplayer -framedrop` when set to `1`, default `0`.
 
 Optional tuning:
 
@@ -230,11 +242,16 @@ RASTERCAST_VIDEO_EFFECT=matrix bin/rastercast.sh "https://www.youtube.com/watch?
 RASTERCAST_VIDEO_EFFECT=wobble bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_EFFECT=scanwarp bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_EFFECT=matrix,scanwarp,trails bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_WATERMARK_TEXT=MUCH bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_SPEED=0.75 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=spectrum bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=vectorscope bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=spatial bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=bits bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_VISUALIZER=projectm RASTERCAST_FPS=30 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_VISUALIZER=projectm RASTERCAST_PROJECTM_PRESETS=/usr/share/projectM/presets bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_VISUALIZER=projectm RASTERCAST_PROJECTM_PRESET="/usr/share/projectM/presets/Geiss - Swirlie 2.milk" bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_VISUALIZER=projectm RASTERCAST_PROJECTM_QUEUE_SIZE=2048 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_AUDIO_EFFECT=echo bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_AUDIO_EFFECT=radio bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_YTDLP=1 bin/rastercast.sh "https://example.com/video-page"
@@ -250,9 +267,9 @@ RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1 bin/rastercast.sh "https://www.youtube.com/p
 
 `RASTERCAST_VIDEO_FIT=auto` is the default. It uses letterboxing for local files and direct media URLs, but center-crops `yt-dlp` inputs to fill the 320x240 CRT frame.
 `RASTERCAST_VIDEO_SIZE` changes the PC-side stream size. MiSTer video mode and BVM support still need to match the resolution you choose. `RASTERCAST_DISPLAY_ASPECT=4:3` can correct geometry when a wide 240p mode like `512x240` is displayed as a 4:3 raster.
-`RASTERCAST_VIDEO_EFFECT` defaults to `none`; available effects are `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, and `scanwarp`. Multiple effects can be layered with commas; order matters.
+`RASTERCAST_VIDEO_EFFECT` defaults to `none`; available effects are `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, `scanwarp`, `avs-feedback`, `avs-grid`, `avs-crt`, and `avs-neon`. Multiple effects can be layered with commas; order matters.
 `RASTERCAST_VIDEO_SPEED` changes video and audio speed together. `RASTERCAST_AUDIO_EFFECT` can add `echo`, `robot`, `radio`, `deep`, or `chipmunk` processing.
-`RASTERCAST_VISUALIZER` replaces the source video with ffmpeg-generated visuals from the audio stream.
+`RASTERCAST_VISUALIZER` replaces the source video with generated visuals from the audio stream. The built-in ffmpeg visualizers run inside ffmpeg. `RASTERCAST_VISUALIZER=projectm` uses the external `rastercast-projectm` helper to render MilkDrop/projectM frames from raw PCM and feed them back into the stream.
 
 Age-restricted YouTube videos require authenticated cookies. Use `RASTERCAST_YTDLP_COOKIES_FROM_BROWSER` with a browser profile that is signed in to YouTube, or export cookies and pass the file with `RASTERCAST_YTDLP_COOKIES`.
 If YouTube signature solving fails, set `RASTERCAST_YTDLP_JS_RUNTIME=node`; newer `yt-dlp` builds may also need `RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github`.
@@ -262,6 +279,7 @@ If MiSTer reports `Cache empty`, increase the player cache or reduce bitrate:
 
 ```bash
 RASTERCAST_CACHE_KB=16384 RASTERCAST_CACHE_MIN=20 /media/fat/Scripts/rastercast.sh "http://pc-host:8090/stream.ts"
+RASTERCAST_CACHE_KB=2048 RASTERCAST_CACHE_MIN=1 RASTERCAST_MPLAYER_AUTOSYNC=30 RASTERCAST_MPLAYER_FRAMEDROP=1 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_BITRATE=700k bin/rastercast.sh /path/to/video.mkv
 ```
 

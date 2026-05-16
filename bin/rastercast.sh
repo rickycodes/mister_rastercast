@@ -2,7 +2,7 @@
 # shellcheck disable=SC2029
 set -euo pipefail
 
-valid_video_effects="none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp"
+valid_video_effects="none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp, avs-feedback, avs-grid, avs-crt, avs-neon"
 
 # Basic helpers
 
@@ -20,8 +20,17 @@ Environment:
   RASTERCAST_DISPLAY_ASPECT  Display aspect ratio, e.g. 4:3 (default: auto)
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
   RASTERCAST_VIDEO_EFFECT  Comma-separated video effects, or none
+  RASTERCAST_WATERMARK_TEXT  Text watermark drawn at bottom right
+  RASTERCAST_WATERMARK_SIZE  Text watermark font size (default: 18)
+  RASTERCAST_WATERMARK_MARGIN  Text watermark edge margin (default: 8)
+  RASTERCAST_WATERMARK_OPACITY  Text watermark opacity from 0.0 to 1.0 (default: 0.65)
   RASTERCAST_VIDEO_SPEED  Playback speed multiplier, from 0.5 to 2.0 (default: 1)
-  RASTERCAST_VISUALIZER  Replace video with audio visualizer: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits
+  RASTERCAST_VISUALIZER  Replace video with audio visualizer: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits, projectm
+  RASTERCAST_PROJECTM    projectM helper path (default: ~/projects/rastercast-projectm/rastercast-projectm)
+  RASTERCAST_PROJECTM_PRESETS  projectM preset directory (default: /usr/share/projectM/presets)
+  RASTERCAST_PROJECTM_PRESET  Lock projectM to one preset file
+  RASTERCAST_PROJECTM_FPS  projectM helper FPS (default: RASTERCAST_FPS or 30)
+  RASTERCAST_PROJECTM_QUEUE_SIZE  ffmpeg queue size for projectM pipes (default: 1024)
   RASTERCAST_AUDIO_EFFECT  Audio effect: none, echo, robot, radio, deep, chipmunk
   RASTERCAST_YTDLP       Force yt-dlp for URL input: 1 or 0 (default: auto)
   RASTERCAST_YTDLP_FORMAT  yt-dlp format for URL inputs (default: progressive <=480p)
@@ -38,6 +47,7 @@ Environment:
   RASTERCAST_MISTER_SCRIPT  MiSTer script path (default: /media/fat/Scripts/rastercast.sh)
   RASTERCAST_MISTER_DEPLOY  Deploy MiSTer script when missing: auto, always, never (default: auto)
   RASTERCAST_MISTER_TTY  Allocate TTY for remote playback controls: 1 or 0 (default: 1)
+  RASTERCAST_MISTER_DETACH  Start remote playback detached from SSH: 1 or 0 (default: 0)
 EOF
 }
 
@@ -115,8 +125,17 @@ load_config() {
   display_aspect=${RASTERCAST_DISPLAY_ASPECT:-auto}
   video_fit=${RASTERCAST_VIDEO_FIT:-auto}
   video_effect=${RASTERCAST_VIDEO_EFFECT:-none}
+  watermark_text=${RASTERCAST_WATERMARK_TEXT:-}
+  watermark_size=${RASTERCAST_WATERMARK_SIZE:-18}
+  watermark_margin=${RASTERCAST_WATERMARK_MARGIN:-8}
+  watermark_opacity=${RASTERCAST_WATERMARK_OPACITY:-0.65}
   video_speed=${RASTERCAST_VIDEO_SPEED:-1}
   visualizer=${RASTERCAST_VISUALIZER:-none}
+  projectm_bin=${RASTERCAST_PROJECTM:-${HOME}/projects/rastercast-projectm/rastercast-projectm}
+  projectm_presets=${RASTERCAST_PROJECTM_PRESETS:-/usr/share/projectM/presets}
+  projectm_preset=${RASTERCAST_PROJECTM_PRESET:-}
+  projectm_fps=${RASTERCAST_PROJECTM_FPS:-${output_fps:-30}}
+  projectm_queue_size=${RASTERCAST_PROJECTM_QUEUE_SIZE:-1024}
   audio_effect=${RASTERCAST_AUDIO_EFFECT:-none}
   ytdlp_format=${RASTERCAST_YTDLP_FORMAT:-best[height<=480][protocol^=http][vcodec!=none][acodec!=none]/best[protocol^=http][vcodec!=none][acodec!=none]/best[height<=480][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]}
   ytdlp_cookies=${RASTERCAST_YTDLP_COOKIES:-}
@@ -133,6 +152,7 @@ load_config() {
   mister_script=${RASTERCAST_MISTER_SCRIPT:-/media/fat/Scripts/rastercast.sh}
   mister_deploy=${RASTERCAST_MISTER_DEPLOY:-auto}
   mister_tty=${RASTERCAST_MISTER_TTY:-1}
+  mister_detach=${RASTERCAST_MISTER_DETACH:-0}
 
   host_ip=${RASTERCAST_HOST_IP:-}
 }
@@ -152,14 +172,24 @@ prepare_workdir() {
   workdir=$(mktemp -d "${TMPDIR:-/tmp}/rastercast.XXXXXX")
   server_pid=""
   ffmpeg_pid=""
+  pcm_ffmpeg_pid=""
+  projectm_pid=""
   ffmpeg_log="${workdir}/ffmpeg.log"
   server_log="${workdir}/server.log"
   stream_path="${workdir}/stream.ts"
   stream_done="${workdir}/stream.done"
   stream_error="${workdir}/stream.error"
+  projectm_pcm_pipe="${workdir}/projectm.pcm"
+  projectm_video_pipe="${workdir}/projectm.rgb"
   stream_url="http://${host_ip}:${port}/stream.ts"
   ssh_control_path="${workdir}/ssh-control-%r@%h:%p"
-  ssh_opts=(-o ControlMaster=auto -o ControlPersist=60 -o "ControlPath=${ssh_control_path}")
+  ssh_opts=(
+    -o ControlMaster=auto
+    -o ControlPersist=60
+    -o ServerAliveInterval=15
+    -o ServerAliveCountMax=3
+    -o "ControlPath=${ssh_control_path}"
+  )
   mister_ssh_used=""
 }
 
@@ -177,6 +207,7 @@ validate_config() {
   esac
 
   validate_bool RASTERCAST_QUEUE_SKIP_UNAVAILABLE "$queue_skip_unavailable"
+  validate_bool RASTERCAST_MISTER_DETACH "$mister_detach"
 
   case "$video_fit" in
     auto | contain | cover)
@@ -215,14 +246,52 @@ validate_config() {
 
   validate_video_effects
 
+  if [[ -n "$watermark_text" ]]; then
+    if [[ ! "$watermark_size" =~ ^[1-9][0-9]*$ ]]; then
+      printf 'error: RASTERCAST_WATERMARK_SIZE must be a positive integer\n' >&2
+      exit 1
+    fi
+    if [[ ! "$watermark_margin" =~ ^[0-9]+$ ]]; then
+      printf 'error: RASTERCAST_WATERMARK_MARGIN must be a non-negative integer\n' >&2
+      exit 1
+    fi
+    if ! awk -v opacity="$watermark_opacity" 'BEGIN { exit !(opacity + 0 == opacity && opacity >= 0 && opacity <= 1) }'; then
+      printf 'error: RASTERCAST_WATERMARK_OPACITY must be a number from 0.0 to 1.0\n' >&2
+      exit 1
+    fi
+  fi
+
   case "$visualizer" in
-    none | waves | spectrum | cqt | vectorscope | freqs | spatial | histogram | bits)
+    none | waves | spectrum | cqt | vectorscope | freqs | spatial | histogram | bits | projectm)
       ;;
     *)
-      printf 'error: RASTERCAST_VISUALIZER must be one of: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits\n' >&2
+      printf 'error: RASTERCAST_VISUALIZER must be one of: none, waves, spectrum, cqt, vectorscope, freqs, spatial, histogram, bits, projectm\n' >&2
       exit 1
       ;;
   esac
+
+  if [[ "$visualizer" == "projectm" ]]; then
+    if [[ ! -x "$projectm_bin" ]]; then
+      printf 'error: RASTERCAST_PROJECTM helper not executable: %s\n' "$projectm_bin" >&2
+      exit 1
+    fi
+    if [[ ! -d "$projectm_presets" ]]; then
+      printf 'error: RASTERCAST_PROJECTM_PRESETS directory not found: %s\n' "$projectm_presets" >&2
+      exit 1
+    fi
+    if [[ -n "$projectm_preset" && ! -f "$projectm_preset" ]]; then
+      printf 'error: RASTERCAST_PROJECTM_PRESET file not found: %s\n' "$projectm_preset" >&2
+      exit 1
+    fi
+    if [[ ! "$projectm_fps" =~ ^[1-9][0-9]*$ ]]; then
+      printf 'error: RASTERCAST_PROJECTM_FPS must be a positive integer\n' >&2
+      exit 1
+    fi
+    if [[ ! "$projectm_queue_size" =~ ^[1-9][0-9]*$ ]]; then
+      printf 'error: RASTERCAST_PROJECTM_QUEUE_SIZE must be a positive integer\n' >&2
+      exit 1
+    fi
+  fi
 
   case "$audio_effect" in
     none | echo | robot | radio | deep | chipmunk)
@@ -296,6 +365,18 @@ video_effect_filter() {
     scanwarp)
       printf '%s\n' "rgbashift=rh=4:bh=-4,noise=alls=12:allf=t+u"
       ;;
+    avs-feedback)
+      printf '%s\n' "tmix=frames=9:weights='1 1 1 1 1 1 1 1 1',eq=contrast=1.45:saturation=1.45:brightness=-0.04,rgbashift=rh=3:bh=-3"
+      ;;
+    avs-grid)
+      printf '%s\n' "scale=iw/2:ih/2:flags=neighbor,tile=2x2,eq=contrast=1.3:saturation=1.35"
+      ;;
+    avs-crt)
+      printf '%s\n' "noise=alls=10:allf=t+u,eq=contrast=1.25:saturation=1.25,rgbashift=rh=2:bh=-2"
+      ;;
+    avs-neon)
+      printf '%s\n' "edgedetect=low=0.04:high=0.18,eq=contrast=1.7:saturation=1.6,lagfun=decay=0.92"
+      ;;
     *)
       return 1
       ;;
@@ -339,6 +420,26 @@ append_video_effects() {
   done
 }
 
+drawtext_escape() {
+  local value=$1
+  value=${value//\\/\\\\}
+  value=${value//:/\\:}
+  value=${value//\'/\\\'}
+  value=${value//,/\\,}
+  printf '%s\n' "$value"
+}
+
+append_watermark() {
+  local escaped_text
+
+  if [[ -z "$watermark_text" ]]; then
+    return
+  fi
+
+  escaped_text=$(drawtext_escape "$watermark_text")
+  video_filter="${video_filter},drawtext=text='${escaped_text}':x=w-tw-${watermark_margin}:y=h-th-${watermark_margin}:fontsize=${watermark_size}:fontcolor=white@${watermark_opacity}:box=1:boxcolor=black@0.28:boxborderw=3"
+}
+
 build_video_filter() {
   local fit="$video_fit"
 
@@ -360,6 +461,7 @@ build_video_filter() {
   esac
 
   append_video_effects
+  append_watermark
 
   if [[ -n "$output_fps" ]]; then
     video_filter="${video_filter},fps=${output_fps}"
@@ -371,10 +473,10 @@ build_video_filter() {
 }
 
 build_audio_filter() {
+  audio_filter=""
+
   if [[ "$video_speed" != "1" && "$video_speed" != "1.0" ]]; then
-    audio_filter="atempo=${video_speed}"
-  else
-    audio_filter=""
+    audio_filter="${audio_filter:+${audio_filter},}atempo=${video_speed}"
   fi
 
   case "$audio_effect" in
@@ -453,7 +555,9 @@ build_ffmpeg_output_args() {
     "$stream_path"
   )
 
-  if [[ "$visualizer" == "none" ]]; then
+  if [[ "$visualizer" == "projectm" ]]; then
+    ffmpeg_output_args=(-map 0:v:0 -map 1:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
+  elif [[ "$visualizer" == "none" ]]; then
     ffmpeg_output_args=(-map 0:v:0 -map 0:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
   else
     local effect
@@ -466,6 +570,9 @@ build_ffmpeg_output_args() {
         viz_filter="${viz_filter},${effect_filter}"
       fi
     done
+    video_filter="$viz_filter"
+    append_watermark
+    viz_filter="$video_filter"
     if [[ -n "$output_fps" ]]; then
       viz_filter="${viz_filter},fps=${output_fps}"
     fi
@@ -574,6 +681,11 @@ concat_escape() {
   printf "file '%s'\n" "$value"
 }
 
+shell_quote() {
+  local value=${1//\'/\'\\\'\'}
+  printf "'%s'" "$value"
+}
+
 write_concat_list() {
   local expanded_items=()
   local item
@@ -663,6 +775,11 @@ copy_mister_script() {
 }
 
 launch_mister() {
+  local playback_cmd
+  local remote_env=()
+  local var
+  local value
+
   case "$mister_auto" in
     1 | yes | true)
       ;;
@@ -701,13 +818,44 @@ launch_mister() {
   esac
 
   printf 'rastercast: launching MiSTer playback on %s@%s\n' "$mister_user" "$mister_host" >&2
-  run_mister_playback "chmod +x '$mister_script' && exec '$mister_script' '$stream_url'"
+  for var in \
+    RASTERCAST_CACHE_KB \
+    RASTERCAST_CACHE_MIN \
+    RASTERCAST_MPLAYER_VO \
+    RASTERCAST_MPLAYER_AUTOSYNC \
+    RASTERCAST_MPLAYER_FRAMEDROP; do
+    value=${!var-}
+    if [[ -n "$value" ]]; then
+      remote_env+=("${var}=$(shell_quote "$value")")
+    fi
+  done
+
+  playback_cmd="chmod +x $(shell_quote "$mister_script") &&"
+  if [[ ${#remote_env[@]} -gt 0 ]]; then
+    playback_cmd+=" ${remote_env[*]}"
+  fi
+  playback_cmd+=" exec $(shell_quote "$mister_script") $(shell_quote "$stream_url")"
+  if is_enabled "$mister_detach"; then
+    run_mister_ssh "nohup sh -c $(shell_quote "$playback_cmd") >/tmp/rastercast.log 2>&1 </dev/null &"
+  else
+    run_mister_playback "$playback_cmd"
+  fi
 }
 
 # Process lifecycle
 
 cleanup() {
   local status=$?
+
+  if [[ -n "${pcm_ffmpeg_pid}" ]] && kill -0 "${pcm_ffmpeg_pid}" 2>/dev/null; then
+    kill "${pcm_ffmpeg_pid}" 2>/dev/null || true
+    wait "${pcm_ffmpeg_pid}" 2>/dev/null || true
+  fi
+
+  if [[ -n "${projectm_pid}" ]] && kill -0 "${projectm_pid}" 2>/dev/null; then
+    kill "${projectm_pid}" 2>/dev/null || true
+    wait "${projectm_pid}" 2>/dev/null || true
+  fi
 
   if [[ -n "${ffmpeg_pid}" ]] && kill -0 "${ffmpeg_pid}" 2>/dev/null; then
     kill "${ffmpeg_pid}" 2>/dev/null || true
@@ -739,6 +887,58 @@ start_server() {
   fi
 }
 
+start_projectm_pipeline() {
+  mkfifo "$projectm_pcm_pipe" "$projectm_video_pipe"
+
+  RASTERCAST_PROJECTM_WIDTH="$video_width" \
+    RASTERCAST_PROJECTM_HEIGHT="$video_height" \
+    RASTERCAST_PROJECTM_FPS="$projectm_fps" \
+    RASTERCAST_PROJECTM_PRESETS="$projectm_presets" \
+    RASTERCAST_PROJECTM_PRESET="$projectm_preset" \
+    "$projectm_bin" --raw-video <"$projectm_pcm_pipe" >"$projectm_video_pipe" 2>>"${ffmpeg_log}" &
+  projectm_pid=$!
+
+  ffmpeg \
+    -hide_banner \
+    -loglevel error \
+    -nostdin \
+    -fflags +genpts \
+    -f rawvideo \
+    -thread_queue_size "$projectm_queue_size" \
+    -pix_fmt rgb24 \
+    -video_size "$video_size" \
+    -framerate "$projectm_fps" \
+    -i "$projectm_video_pipe" \
+    -re \
+    -thread_queue_size "$projectm_queue_size" \
+    -f concat \
+    -safe 0 \
+    -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+    -i "$concat_list" \
+    "${ffmpeg_output_args[@]}" >"${ffmpeg_log}" 2>&1 &
+  ffmpeg_pid=$!
+
+  ffmpeg \
+    -hide_banner \
+    -y \
+    -loglevel error \
+    -nostdin \
+    -re \
+    -fflags +genpts \
+    -thread_queue_size "$projectm_queue_size" \
+    -f concat \
+    -safe 0 \
+    -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+    -i "$concat_list" \
+    -map 0:a:0 \
+    -vn \
+    -ac 2 \
+    -ar 44100 \
+    -f f32le \
+    "$projectm_pcm_pipe" >>"${ffmpeg_log}" 2>&1 &
+  pcm_ffmpeg_pid=$!
+}
+
 start_ffmpeg() {
   local audio_filter
   local ffmpeg_output_args
@@ -757,12 +957,16 @@ start_ffmpeg() {
   build_ffmpeg_output_args
 
   write_concat_list
-  ffmpeg "${ffmpeg_args[@]}" \
-    -f concat \
-    -safe 0 \
-    -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
-    -i "$concat_list" \
-    "${ffmpeg_output_args[@]}" >"${ffmpeg_log}" 2>&1 &
+  if [[ "$visualizer" == "projectm" ]]; then
+    start_projectm_pipeline
+  else
+    ffmpeg "${ffmpeg_args[@]}" \
+      -f concat \
+      -safe 0 \
+      -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+      -i "$concat_list" \
+      "${ffmpeg_output_args[@]}" >"${ffmpeg_log}" 2>&1 &
+  fi
   ffmpeg_pid=$!
 }
 
