@@ -250,6 +250,53 @@ visualizer_filter() {
   esac
 }
 
+build_ffmpeg_common_args() {
+  printf '%s\n' \
+    -hide_banner \
+    -loglevel error \
+    -nostdin \
+    -re \
+    -fflags \
+    +genpts
+}
+
+build_concat_input_args() {
+  local concat_list="$concat_list"
+
+  printf '%s\n' \
+    -f concat \
+    -safe 0 \
+    -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+    -i "$concat_list"
+}
+
+build_projectm_video_input_args() {
+  local projectm_queue_size="$projectm_queue_size"
+  local video_size="$video_size"
+  local projectm_fps="$projectm_fps"
+  local projectm_video_pipe="$projectm_video_pipe"
+
+  printf '%s\n' \
+    -f rawvideo \
+    -thread_queue_size "$projectm_queue_size" \
+    -pix_fmt rgb24 \
+    -video_size "$video_size" \
+    -framerate "$projectm_fps" \
+    -i "$projectm_video_pipe"
+}
+
+build_projectm_pcm_input_args() {
+  local projectm_queue_size="$projectm_queue_size"
+  local concat_list="$concat_list"
+
+  printf '%s\n' \
+    -thread_queue_size "$projectm_queue_size" \
+    -f concat \
+    -safe 0 \
+    -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+    -i "$concat_list"
+}
+
 build_ffmpeg_output_args() {
   local visualizer="$visualizer"
   local watermark_image="$watermark_image"
@@ -334,6 +381,10 @@ build_ffmpeg_output_args() {
 }
 
 start_projectm_pipeline() {
+  local -a ffmpeg_common_args
+  local -a concat_input_args
+  local -a projectm_video_input_args
+  local -a projectm_pcm_input_args
   local projectm_pcm_pipe="$projectm_pcm_pipe"
   local projectm_video_pipe="$projectm_video_pipe"
   local video_width="$video_width"
@@ -351,6 +402,11 @@ start_projectm_pipeline() {
 
   mkfifo "$projectm_pcm_pipe" "$projectm_video_pipe"
 
+  mapfile -t ffmpeg_common_args < <(build_ffmpeg_common_args)
+  mapfile -t concat_input_args < <(build_concat_input_args)
+  mapfile -t projectm_video_input_args < <(build_projectm_video_input_args)
+  mapfile -t projectm_pcm_input_args < <(build_projectm_pcm_input_args)
+
   RASTERCAST_PROJECTM_WIDTH="$video_width" \
     RASTERCAST_PROJECTM_HEIGHT="$video_height" \
     RASTERCAST_PROJECTM_FPS="$projectm_fps" \
@@ -359,39 +415,15 @@ start_projectm_pipeline() {
     "$projectm_bin" --raw-video <"$projectm_pcm_pipe" >"$projectm_video_pipe" 2>>"${ffmpeg_log}" &
   projectm_pid=$!
 
-  ffmpeg \
-    -hide_banner \
-    -loglevel error \
-    -nostdin \
-    -fflags +genpts \
-    -f rawvideo \
-    -thread_queue_size "$projectm_queue_size" \
-    -pix_fmt rgb24 \
-    -video_size "$video_size" \
-    -framerate "$projectm_fps" \
-    -i "$projectm_video_pipe" \
-    -re \
-    -thread_queue_size "$projectm_queue_size" \
-    -f concat \
-    -safe 0 \
-    -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
-    -i "$concat_list" \
+  ffmpeg "${ffmpeg_common_args[@]}" \
+    "${projectm_video_input_args[@]}" \
+    "${concat_input_args[@]}" \
     "${watermark_input_args[@]}" \
     "${ffmpeg_output_args[@]}" >"${ffmpeg_log}" 2>&1 &
   ffmpeg_pid=$!
 
-  ffmpeg \
-    -hide_banner \
-    -y \
-    -loglevel error \
-    -nostdin \
-    -re \
-    -fflags +genpts \
-    -thread_queue_size "$projectm_queue_size" \
-    -f concat \
-    -safe 0 \
-    -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
-    -i "$concat_list" \
+  ffmpeg -y "${ffmpeg_common_args[@]}" \
+    "${projectm_pcm_input_args[@]}" \
     -map 0:a:0 \
     -vn \
     -ac 2 \
@@ -402,21 +434,18 @@ start_projectm_pipeline() {
 }
 
 start_ffmpeg() {
+  local -a ffmpeg_common_args
+  local -a concat_input_args
   local audio_filter
   local ffmpeg_output_args
   local video_filter
   local concat_list="$concat_list"
   local ffmpeg_log="$ffmpeg_log"
-  local ffmpeg_args=(
-    -hide_banner
-    -loglevel error
-    -nostdin
-    -re
-    -fflags +genpts
-  )
 
   build_video_filter
   build_audio_filter
+  mapfile -t ffmpeg_common_args < <(build_ffmpeg_common_args)
+  mapfile -t concat_input_args < <(build_concat_input_args)
 
   build_ffmpeg_output_args
 
@@ -424,11 +453,8 @@ start_ffmpeg() {
   if [[ "$visualizer" == "projectm" ]]; then
     start_projectm_pipeline
   else
-    ffmpeg "${ffmpeg_args[@]}" \
-      -f concat \
-      -safe 0 \
-      -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
-      -i "$concat_list" \
+    ffmpeg "${ffmpeg_common_args[@]}" \
+      "${concat_input_args[@]}" \
       "${watermark_input_args[@]}" \
       "${ffmpeg_output_args[@]}" >"${ffmpeg_log}" 2>&1 &
   fi
