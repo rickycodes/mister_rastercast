@@ -1,0 +1,17 @@
+name: Smoke Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    name: Smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run smoke tests
+        run: bash tests/smoke.sh
