@@ -21,6 +21,10 @@ Environment:
   RASTERCAST_VIDEO_FIT   Video fit mode: auto, contain, cover (default: auto)
   RASTERCAST_VIDEO_EFFECT  Comma-separated video effects, or none
   RASTERCAST_WATERMARK_TEXT  Text watermark drawn at bottom right
+  RASTERCAST_WATERMARK_IMAGE  Image watermark file, preferably PNG/WebP/SVG
+  RASTERCAST_WATERMARK_X  Watermark X expression (default: bottom-right)
+  RASTERCAST_WATERMARK_Y  Watermark Y expression (default: bottom-right)
+  RASTERCAST_WATERMARK_SCALE  Watermark image scale factor (default: 1)
   RASTERCAST_WATERMARK_SIZE  Text watermark font size (default: 18)
   RASTERCAST_WATERMARK_MARGIN  Text watermark edge margin (default: 8)
   RASTERCAST_WATERMARK_OPACITY  Text watermark opacity from 0.0 to 1.0 (default: 0.65)
@@ -126,6 +130,10 @@ load_config() {
   video_fit=${RASTERCAST_VIDEO_FIT:-auto}
   video_effect=${RASTERCAST_VIDEO_EFFECT:-none}
   watermark_text=${RASTERCAST_WATERMARK_TEXT:-}
+  watermark_image=${RASTERCAST_WATERMARK_IMAGE:-}
+  watermark_x=${RASTERCAST_WATERMARK_X:-}
+  watermark_y=${RASTERCAST_WATERMARK_Y:-}
+  watermark_scale=${RASTERCAST_WATERMARK_SCALE:-1}
   watermark_size=${RASTERCAST_WATERMARK_SIZE:-18}
   watermark_margin=${RASTERCAST_WATERMARK_MARGIN:-8}
   watermark_opacity=${RASTERCAST_WATERMARK_OPACITY:-0.65}
@@ -246,7 +254,7 @@ validate_config() {
 
   validate_video_effects
 
-  if [[ -n "$watermark_text" ]]; then
+  if [[ -n "$watermark_text" || -n "$watermark_image" ]]; then
     if [[ ! "$watermark_size" =~ ^[1-9][0-9]*$ ]]; then
       printf 'error: RASTERCAST_WATERMARK_SIZE must be a positive integer\n' >&2
       exit 1
@@ -259,6 +267,35 @@ validate_config() {
       printf 'error: RASTERCAST_WATERMARK_OPACITY must be a number from 0.0 to 1.0\n' >&2
       exit 1
     fi
+  fi
+
+  if [[ -n "$watermark_x" || -n "$watermark_y" ]]; then
+    if [[ -z "$watermark_text" && -z "$watermark_image" ]]; then
+      printf 'error: RASTERCAST_WATERMARK_X/Y require RASTERCAST_WATERMARK_TEXT or RASTERCAST_WATERMARK_IMAGE\n' >&2
+      exit 1
+    fi
+  fi
+
+  if [[ -n "$watermark_image" ]]; then
+    if ! awk -v scale="$watermark_scale" 'BEGIN { exit !(scale + 0 == scale && scale > 0 && scale <= 1) }'; then
+      printf 'error: RASTERCAST_WATERMARK_SCALE must be a number from 0.0 to 1.0\n' >&2
+      exit 1
+    fi
+  fi
+
+  if [[ -n "$watermark_image" ]]; then
+    if [[ ! -f "$watermark_image" ]]; then
+      printf 'error: RASTERCAST_WATERMARK_IMAGE file not found: %s\n' "$watermark_image" >&2
+      exit 1
+    fi
+    case "${watermark_image##*.}" in
+      png | webp | svg | PNG | WEBP | SVG)
+        ;;
+      *)
+        printf 'error: RASTERCAST_WATERMARK_IMAGE must be a .png, .webp, or .svg file\n' >&2
+        exit 1
+        ;;
+    esac
   fi
 
   case "$visualizer" in
@@ -431,13 +468,28 @@ drawtext_escape() {
 
 append_watermark() {
   local escaped_text
+  local x_expr
+  local y_expr
 
   if [[ -z "$watermark_text" ]]; then
     return
   fi
 
   escaped_text=$(drawtext_escape "$watermark_text")
-  video_filter="${video_filter},drawtext=text='${escaped_text}':x=w-tw-${watermark_margin}:y=h-th-${watermark_margin}:fontsize=${watermark_size}:fontcolor=white@${watermark_opacity}:box=1:boxcolor=black@0.28:boxborderw=3"
+  x_expr=${watermark_x:-w-tw-${watermark_margin}}
+  y_expr=${watermark_y:-h-th-${watermark_margin}}
+  video_filter="${video_filter},drawtext=text='${escaped_text}':x=${x_expr}:y=${y_expr}:fontsize=${watermark_size}:fontcolor=white@${watermark_opacity}:box=1:boxcolor=black@0.28:boxborderw=3"
+}
+
+watermark_overlay_filter() {
+  local base_label=$1
+  local image_label=$2
+  local x_expr
+  local y_expr
+
+  x_expr=${watermark_x:-W-w-${watermark_margin}}
+  y_expr=${watermark_y:-H-h-${watermark_margin}}
+  printf '[%s]scale=iw*%s:ih*%s:flags=lanczos,format=rgba,colorchannelmixer=aa=%s[wm];[%s][wm]overlay=x=%s:y=%s:repeatlast=1:shortest=0[v]' "$image_label" "$watermark_scale" "$watermark_scale" "$watermark_opacity" "$base_label" "$x_expr" "$y_expr"
 }
 
 build_video_filter() {
@@ -556,9 +608,17 @@ build_ffmpeg_output_args() {
   )
 
   if [[ "$visualizer" == "projectm" ]]; then
-    ffmpeg_output_args=(-map 0:v:0 -map 1:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
+    if [[ -n "$watermark_image" ]]; then
+      ffmpeg_output_args=(-filter_complex "[0:v]${video_filter}[base];$(watermark_overlay_filter base '2:v')" -map "[v]" -map 1:a? "${ffmpeg_output_args[@]}")
+    else
+      ffmpeg_output_args=(-map 0:v:0 -map 1:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
+    fi
   elif [[ "$visualizer" == "none" ]]; then
-    ffmpeg_output_args=(-map 0:v:0 -map 0:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
+    if [[ -n "$watermark_image" ]]; then
+      ffmpeg_output_args=(-filter_complex "[0:v]${video_filter}[base];$(watermark_overlay_filter base '1:v')" -map "[v]" -map 0:a? "${ffmpeg_output_args[@]}")
+    else
+      ffmpeg_output_args=(-map 0:v:0 -map 0:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
+    fi
   else
     local effect
     local effect_filter
@@ -579,7 +639,11 @@ build_ffmpeg_output_args() {
     if [[ "$video_speed" != "1" && "$video_speed" != "1.0" ]]; then
       viz_filter="${viz_filter},setpts=PTS/${video_speed}"
     fi
-    ffmpeg_output_args=(-filter_complex "[0:a]${viz_filter}[v]" -map "[v]" -map 0:a:0 "${ffmpeg_output_args[@]}")
+    if [[ -n "$watermark_image" ]]; then
+      ffmpeg_output_args=(-filter_complex "[0:a]${viz_filter}[base];$(watermark_overlay_filter base '1:v')" -map "[v]" -map 0:a:0 "${ffmpeg_output_args[@]}")
+    else
+      ffmpeg_output_args=(-filter_complex "[0:a]${viz_filter}[v]" -map "[v]" -map 0:a:0 "${ffmpeg_output_args[@]}")
+    fi
   fi
 
   if [[ -n "$audio_filter" ]]; then
@@ -888,7 +952,13 @@ start_server() {
 }
 
 start_projectm_pipeline() {
+  local watermark_input_args=()
+
   mkfifo "$projectm_pcm_pipe" "$projectm_video_pipe"
+
+  if [[ -n "$watermark_image" ]]; then
+    watermark_input_args=(-i "$watermark_image")
+  fi
 
   RASTERCAST_PROJECTM_WIDTH="$video_width" \
     RASTERCAST_PROJECTM_HEIGHT="$video_height" \
@@ -915,6 +985,7 @@ start_projectm_pipeline() {
     -safe 0 \
     -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
     -i "$concat_list" \
+    "${watermark_input_args[@]}" \
     "${ffmpeg_output_args[@]}" >"${ffmpeg_log}" 2>&1 &
   ffmpeg_pid=$!
 
@@ -943,9 +1014,14 @@ start_ffmpeg() {
   local audio_filter
   local ffmpeg_output_args
   local video_filter
+  local watermark_input_args=()
 
   build_video_filter
   build_audio_filter
+
+  if [[ -n "$watermark_image" ]]; then
+    watermark_input_args=(-i "$watermark_image")
+  fi
 
   local ffmpeg_args=(
     -hide_banner
@@ -965,6 +1041,7 @@ start_ffmpeg() {
       -safe 0 \
       -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
       -i "$concat_list" \
+      "${watermark_input_args[@]}" \
       "${ffmpeg_output_args[@]}" >"${ffmpeg_log}" 2>&1 &
   fi
   ffmpeg_pid=$!

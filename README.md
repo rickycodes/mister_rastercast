@@ -186,9 +186,13 @@ Video output:
 - `RASTERCAST_VIDEO_FIT` sets sizing: `auto`, `contain`, or `cover`; default `auto`.
 - `RASTERCAST_VIDEO_EFFECT` sets comma-separated effect presets: `none`, `acid`, `trails`, `edges`, `ghost`, `matrix`, `rgbshift`, `negative`, `warp`, `wobble`, `feedback`, `scanwarp`, `avs-feedback`, `avs-grid`, `avs-crt`, or `avs-neon`; default `none`.
 - `RASTERCAST_WATERMARK_TEXT` draws a text watermark in the lower right; default unset.
+- `RASTERCAST_WATERMARK_IMAGE` overlays a watermark image in the lower right; PNG, WebP, or SVG recommended.
+- `RASTERCAST_WATERMARK_X` sets the watermark X position as an ffmpeg expression; default is bottom-right.
+- `RASTERCAST_WATERMARK_Y` sets the watermark Y position as an ffmpeg expression; default is bottom-right.
+- `RASTERCAST_WATERMARK_SCALE` scales an image watermark from `0.0` to `1.0`; default `1`.
 - `RASTERCAST_WATERMARK_SIZE` sets watermark font size; default `18`.
 - `RASTERCAST_WATERMARK_MARGIN` sets watermark edge margin; default `8`.
-- `RASTERCAST_WATERMARK_OPACITY` sets watermark opacity from `0.0` to `1.0`; default `0.65`.
+- `RASTERCAST_WATERMARK_OPACITY` sets watermark opacity from `0.0` to `1.0`; default `0.65` for text and image watermarks.
 - `RASTERCAST_VIDEO_SPEED` sets playback speed from `0.5` to `2.0`, default `1`.
 - `RASTERCAST_VISUALIZER` replaces source video with an audio visualizer: `none`, `waves`, `spectrum`, `cqt`, `vectorscope`, `freqs`, `spatial`, `histogram`, `bits`, or `projectm`; default `none`.
 - `RASTERCAST_PROJECTM` sets the ProjectM helper path when `RASTERCAST_VISUALIZER=projectm`; default `~/projects/rastercast-projectm/rastercast-projectm`.
@@ -243,6 +247,9 @@ RASTERCAST_VIDEO_EFFECT=wobble bin/rastercast.sh "https://www.youtube.com/watch?
 RASTERCAST_VIDEO_EFFECT=scanwarp bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_EFFECT=matrix,scanwarp,trails bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_WATERMARK_TEXT=MUCH bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_WATERMARK_IMAGE=/path/to/logo.png bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_WATERMARK_X=20 RASTERCAST_WATERMARK_Y=20 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+RASTERCAST_WATERMARK_SCALE=0.25 RASTERCAST_WATERMARK_IMAGE=/path/to/logo.png bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_SPEED=0.75 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=spectrum bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VISUALIZER=vectorscope bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
