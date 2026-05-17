@@ -163,6 +163,10 @@ load_config() {
   mister_detach=${RASTERCAST_MISTER_DETACH:-0}
 
   host_ip=${RASTERCAST_HOST_IP:-}
+  watermark_input_args=()
+  if [[ -n "$watermark_image" ]]; then
+    watermark_input_args=(-i "$watermark_image")
+  fi
 }
 
 resolve_host_ip() {
@@ -253,50 +257,7 @@ validate_config() {
   fit_height=$((fit_height / 2 * 2))
 
   validate_video_effects
-
-  if [[ -n "$watermark_text" || -n "$watermark_image" ]]; then
-    if [[ ! "$watermark_size" =~ ^[1-9][0-9]*$ ]]; then
-      printf 'error: RASTERCAST_WATERMARK_SIZE must be a positive integer\n' >&2
-      exit 1
-    fi
-    if [[ ! "$watermark_margin" =~ ^[0-9]+$ ]]; then
-      printf 'error: RASTERCAST_WATERMARK_MARGIN must be a non-negative integer\n' >&2
-      exit 1
-    fi
-    if ! awk -v opacity="$watermark_opacity" 'BEGIN { exit !(opacity + 0 == opacity && opacity >= 0 && opacity <= 1) }'; then
-      printf 'error: RASTERCAST_WATERMARK_OPACITY must be a number from 0.0 to 1.0\n' >&2
-      exit 1
-    fi
-  fi
-
-  if [[ -n "$watermark_x" || -n "$watermark_y" ]]; then
-    if [[ -z "$watermark_text" && -z "$watermark_image" ]]; then
-      printf 'error: RASTERCAST_WATERMARK_X/Y require RASTERCAST_WATERMARK_TEXT or RASTERCAST_WATERMARK_IMAGE\n' >&2
-      exit 1
-    fi
-  fi
-
-  if [[ -n "$watermark_image" ]]; then
-    if ! awk -v scale="$watermark_scale" 'BEGIN { exit !(scale + 0 == scale && scale > 0 && scale <= 1) }'; then
-      printf 'error: RASTERCAST_WATERMARK_SCALE must be a number from 0.0 to 1.0\n' >&2
-      exit 1
-    fi
-  fi
-
-  if [[ -n "$watermark_image" ]]; then
-    if [[ ! -f "$watermark_image" ]]; then
-      printf 'error: RASTERCAST_WATERMARK_IMAGE file not found: %s\n' "$watermark_image" >&2
-      exit 1
-    fi
-    case "${watermark_image##*.}" in
-      png | webp | svg | PNG | WEBP | SVG)
-        ;;
-      *)
-        printf 'error: RASTERCAST_WATERMARK_IMAGE must be a .png, .webp, or .svg file\n' >&2
-        exit 1
-        ;;
-    esac
-  fi
+  validate_watermark_config
 
   case "$visualizer" in
     none | waves | spectrum | cqt | vectorscope | freqs | spatial | histogram | bits | projectm)
@@ -445,6 +406,51 @@ validate_video_effects() {
   done
 }
 
+validate_watermark_config() {
+  if [[ -n "$watermark_text" || -n "$watermark_image" ]]; then
+    if [[ ! "$watermark_size" =~ ^[1-9][0-9]*$ ]]; then
+      printf 'error: RASTERCAST_WATERMARK_SIZE must be a positive integer\n' >&2
+      exit 1
+    fi
+    if [[ ! "$watermark_margin" =~ ^[0-9]+$ ]]; then
+      printf 'error: RASTERCAST_WATERMARK_MARGIN must be a non-negative integer\n' >&2
+      exit 1
+    fi
+    if ! awk -v opacity="$watermark_opacity" 'BEGIN { exit !(opacity + 0 == opacity && opacity >= 0 && opacity <= 1) }'; then
+      printf 'error: RASTERCAST_WATERMARK_OPACITY must be a number from 0.0 to 1.0\n' >&2
+      exit 1
+    fi
+  fi
+
+  if [[ -n "$watermark_x" || -n "$watermark_y" ]]; then
+    if [[ -z "$watermark_text" && -z "$watermark_image" ]]; then
+      printf 'error: RASTERCAST_WATERMARK_X/Y require RASTERCAST_WATERMARK_TEXT or RASTERCAST_WATERMARK_IMAGE\n' >&2
+      exit 1
+    fi
+  fi
+
+  if [[ -n "$watermark_image" ]]; then
+    if ! awk -v scale="$watermark_scale" 'BEGIN { exit !(scale + 0 == scale && scale > 0 && scale <= 1) }'; then
+      printf 'error: RASTERCAST_WATERMARK_SCALE must be a number from 0.0 to 1.0\n' >&2
+      exit 1
+    fi
+
+    if [[ ! -f "$watermark_image" ]]; then
+      printf 'error: RASTERCAST_WATERMARK_IMAGE file not found: %s\n' "$watermark_image" >&2
+      exit 1
+    fi
+
+    case "${watermark_image##*.}" in
+      png | webp | svg | PNG | WEBP | SVG)
+        ;;
+      *)
+        printf 'error: RASTERCAST_WATERMARK_IMAGE must be a .png, .webp, or .svg file\n' >&2
+        exit 1
+        ;;
+    esac
+  fi
+}
+
 append_video_effects() {
   local effect
   local effect_filter
@@ -481,15 +487,15 @@ append_watermark() {
   video_filter="${video_filter},drawtext=text='${escaped_text}':x=${x_expr}:y=${y_expr}:fontsize=${watermark_size}:fontcolor=white@${watermark_opacity}:box=1:boxcolor=black@0.28:boxborderw=3"
 }
 
-watermark_overlay_filter() {
+build_watermark_overlay_chain() {
   local base_label=$1
-  local image_label=$2
+  local overlay_input=$2
   local x_expr
   local y_expr
 
   x_expr=${watermark_x:-W-w-${watermark_margin}}
   y_expr=${watermark_y:-H-h-${watermark_margin}}
-  printf '[%s]scale=iw*%s:ih*%s:flags=lanczos,format=rgba,colorchannelmixer=aa=%s[wm];[%s][wm]overlay=x=%s:y=%s:repeatlast=1:shortest=0[v]' "$image_label" "$watermark_scale" "$watermark_scale" "$watermark_opacity" "$base_label" "$x_expr" "$y_expr"
+  printf '[%s]scale=iw*%s:ih*%s:flags=lanczos,format=rgba,colorchannelmixer=aa=%s[wm];[%s][wm]overlay=x=%s:y=%s:repeatlast=1:shortest=0[v]' "$overlay_input" "$watermark_scale" "$watermark_scale" "$watermark_opacity" "$base_label" "$x_expr" "$y_expr"
 }
 
 build_video_filter() {
@@ -609,13 +615,13 @@ build_ffmpeg_output_args() {
 
   if [[ "$visualizer" == "projectm" ]]; then
     if [[ -n "$watermark_image" ]]; then
-      ffmpeg_output_args=(-filter_complex "[0:v]${video_filter}[base];$(watermark_overlay_filter base '2:v')" -map "[v]" -map 1:a? "${ffmpeg_output_args[@]}")
+      ffmpeg_output_args=(-filter_complex "[0:v]${video_filter}[base];$(build_watermark_overlay_chain base '2:v')" -map "[v]" -map 1:a? "${ffmpeg_output_args[@]}")
     else
       ffmpeg_output_args=(-map 0:v:0 -map 1:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
     fi
   elif [[ "$visualizer" == "none" ]]; then
     if [[ -n "$watermark_image" ]]; then
-      ffmpeg_output_args=(-filter_complex "[0:v]${video_filter}[base];$(watermark_overlay_filter base '1:v')" -map "[v]" -map 0:a? "${ffmpeg_output_args[@]}")
+      ffmpeg_output_args=(-filter_complex "[0:v]${video_filter}[base];$(build_watermark_overlay_chain base '1:v')" -map "[v]" -map 0:a? "${ffmpeg_output_args[@]}")
     else
       ffmpeg_output_args=(-map 0:v:0 -map 0:a? -vf "$video_filter" "${ffmpeg_output_args[@]}")
     fi
@@ -640,7 +646,7 @@ build_ffmpeg_output_args() {
       viz_filter="${viz_filter},setpts=PTS/${video_speed}"
     fi
     if [[ -n "$watermark_image" ]]; then
-      ffmpeg_output_args=(-filter_complex "[0:a]${viz_filter}[base];$(watermark_overlay_filter base '1:v')" -map "[v]" -map 0:a:0 "${ffmpeg_output_args[@]}")
+      ffmpeg_output_args=(-filter_complex "[0:a]${viz_filter}[base];$(build_watermark_overlay_chain base '1:v')" -map "[v]" -map 0:a:0 "${ffmpeg_output_args[@]}")
     else
       ffmpeg_output_args=(-filter_complex "[0:a]${viz_filter}[v]" -map "[v]" -map 0:a:0 "${ffmpeg_output_args[@]}")
     fi
@@ -952,13 +958,7 @@ start_server() {
 }
 
 start_projectm_pipeline() {
-  local watermark_input_args=()
-
   mkfifo "$projectm_pcm_pipe" "$projectm_video_pipe"
-
-  if [[ -n "$watermark_image" ]]; then
-    watermark_input_args=(-i "$watermark_image")
-  fi
 
   RASTERCAST_PROJECTM_WIDTH="$video_width" \
     RASTERCAST_PROJECTM_HEIGHT="$video_height" \
@@ -1014,14 +1014,9 @@ start_ffmpeg() {
   local audio_filter
   local ffmpeg_output_args
   local video_filter
-  local watermark_input_args=()
 
   build_video_filter
   build_audio_filter
-
-  if [[ -n "$watermark_image" ]]; then
-    watermark_input_args=(-i "$watermark_image")
-  fi
 
   local ffmpeg_args=(
     -hide_banner
