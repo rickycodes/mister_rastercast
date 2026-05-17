@@ -19,7 +19,7 @@ build_mister_ssh_opts() {
 run_mister_scp() {
   local -a ssh_opts=()
 
-  IFS= read -r -d '' -a ssh_opts < <(build_mister_ssh_opts)
+  mapfile -d '' -t ssh_opts < <(build_mister_ssh_opts)
   cfg+=( [mister_ssh_used]=1 )
   scp "${ssh_opts[@]}" "$@"
 }
@@ -27,7 +27,7 @@ run_mister_scp() {
 remote_test_mister_script() {
   local -a ssh_opts=()
 
-  IFS= read -r -d '' -a ssh_opts < <(build_mister_ssh_opts)
+  mapfile -d '' -t ssh_opts < <(build_mister_ssh_opts)
   cfg+=( [mister_ssh_used]=1 )
   ssh "${ssh_opts[@]}" "${cfg[mister_user]}@${cfg[mister_host]}" sh -s -- "${cfg[mister_script]}" <<'SCRIPT'
 script_path=$1
@@ -54,7 +54,7 @@ close_mister_connection() {
     return
   fi
 
-  IFS= read -r -d '' -a ssh_opts < <(build_mister_ssh_opts)
+  mapfile -d '' -t ssh_opts < <(build_mister_ssh_opts)
   ssh "${ssh_opts[@]}" -O exit "${cfg[mister_user]}@${cfg[mister_host]}" >/dev/null 2>&1 || true
 }
 
@@ -64,7 +64,7 @@ run_remote_mister_script() {
   local -a ssh_opts=()
   local -a ssh_cmd=(ssh)
 
-  IFS= read -r -d '' -a ssh_opts < <(build_mister_ssh_opts)
+  mapfile -d '' -t ssh_opts < <(build_mister_ssh_opts)
   ssh_cmd+=( "${ssh_opts[@]}" )
   if is_enabled "$use_tty"; then
     ssh_cmd+=( -t )

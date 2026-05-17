@@ -110,6 +110,10 @@ run_case() {
     playlist)
       env_args+=( RASTERCAST_YTDLP_PLAYLIST_ITEMS=1:2 )
       ;;
+    deploy)
+      env_args+=( RASTERCAST_MISTER_AUTO=1 )
+      env_args+=( RASTERCAST_MISTER_DEPLOY=always )
+      ;;
     watermark)
       env_args+=( RASTERCAST_WATERMARK_IMAGE="${case_dir}/watermark.png" )
       : >"${case_dir}/watermark.png"
@@ -188,16 +192,16 @@ EOF
   cat >"${stub_dir}/ssh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-printf 'smoke: ssh should not be called in this case\n' >&2
-exit 99
+log_file=${RASTERCAST_SMOKE_LOG:?}
+printf 'ssh %s\n' "$*" >>"$log_file"
 EOF
   chmod +x "${stub_dir}/ssh"
 
   cat >"${stub_dir}/scp" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-printf 'smoke: scp should not be called in this case\n' >&2
-exit 99
+log_file=${RASTERCAST_SMOKE_LOG:?}
+printf 'scp %s\n' "$*" >>"$log_file"
 EOF
   chmod +x "${stub_dir}/scp"
 
@@ -237,6 +241,10 @@ EOF
     projectm)
       assert_contains "$log_file" "rastercast: queue has 1 item(s)"
       ;;
+    deploy)
+      assert_contains "$log_file" "rastercast: deploying MiSTer script"
+      assert_contains "$log_file" "scp "
+      ;;
     watermark)
       assert_contains "$log_file" "watermark.png"
       ;;
@@ -254,6 +262,7 @@ main() {
 
   run_case youtube "https://www.youtube.com/watch?v=VIDEO_ID"
   run_case playlist "https://www.youtube.com/playlist?list=PLAYLIST_ID"
+  run_case deploy "$local_file"
   run_case watermark "$local_file"
   run_case projectm "$local_file"
 }
