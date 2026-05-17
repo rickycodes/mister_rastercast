@@ -4,7 +4,6 @@ build_mister_ssh_opts() {
   local -a out=()
 
   out+=(
-    -o BatchMode=yes
     -o ConnectTimeout=10
     -o ServerAliveInterval=15
     -o ServerAliveCountMax=3
