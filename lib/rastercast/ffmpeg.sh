@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2034
+# shellcheck disable=SC2034,SC2154
 
 video_effect_filter() {
   case "$1" in
@@ -59,8 +59,6 @@ video_effect_filter() {
 
 validate_video_effects() {
   local effect
-  local video_effect="$video_effect"
-  local valid_video_effects="$valid_video_effects"
 
   IFS=',' read -r -a video_effects <<< "$video_effect"
   if [[ ${#video_effects[@]} -eq 0 ]]; then
@@ -87,8 +85,6 @@ validate_video_effects() {
 append_video_effects() {
   local effect
   local effect_filter
-  local video_filter="$video_filter"
-  local video_effects=("${video_effects[@]}")
 
   for effect in "${video_effects[@]}"; do
     effect_filter=$(video_effect_filter "$effect")
@@ -111,13 +107,6 @@ append_watermark() {
   local escaped_text
   local x_expr
   local y_expr
-  local watermark_text="$watermark_text"
-  local watermark_x="$watermark_x"
-  local watermark_y="$watermark_y"
-  local watermark_margin="$watermark_margin"
-  local watermark_size="$watermark_size"
-  local watermark_opacity="$watermark_opacity"
-  local video_filter="$video_filter"
 
   if [[ -z "$watermark_text" ]]; then
     return
@@ -134,11 +123,6 @@ build_watermark_overlay_chain() {
   local overlay_input=$2
   local x_expr
   local y_expr
-  local watermark_x="$watermark_x"
-  local watermark_y="$watermark_y"
-  local watermark_margin="$watermark_margin"
-  local watermark_scale="$watermark_scale"
-  local watermark_opacity="$watermark_opacity"
 
   x_expr=${watermark_x:-W-w-${watermark_margin}}
   y_expr=${watermark_y:-H-h-${watermark_margin}}
@@ -147,16 +131,6 @@ build_watermark_overlay_chain() {
 
 build_video_filter() {
   local fit="$video_fit"
-  local video_fit="$video_fit"
-  local input_uses_ytdlp="$input_uses_ytdlp"
-  local fit_width="$fit_width"
-  local fit_height="$fit_height"
-  local video_width="$video_width"
-  local video_height="$video_height"
-  local output_fps="$output_fps"
-  local video_speed="$video_speed"
-  local video_filter="$video_filter"
-  local video_effects=("${video_effects[@]}")
 
   if [[ "$fit" == "auto" ]]; then
     if (( input_uses_ytdlp )); then
@@ -188,8 +162,6 @@ build_video_filter() {
 }
 
 build_audio_filter() {
-  local video_speed="$video_speed"
-  local audio_effect="$audio_effect"
   local audio_filter=""
 
   if [[ "$video_speed" != "1" && "$video_speed" != "1.0" ]]; then
@@ -218,10 +190,6 @@ build_audio_filter() {
 }
 
 visualizer_filter() {
-  local visualizer="$visualizer"
-  local fit_width="$fit_width"
-  local fit_height="$fit_height"
-
   case "$visualizer" in
     waves)
       printf 'showwaves=s=%sx%s:mode=cline:colors=00ff66|00ccff:scale=sqrt' "$fit_width" "$fit_height"
@@ -298,19 +266,6 @@ build_projectm_pcm_input_args() {
 }
 
 build_ffmpeg_output_args() {
-  local visualizer="$visualizer"
-  local watermark_image="$watermark_image"
-  local video_filter="$video_filter"
-  local audio_filter="$audio_filter"
-  local video_bitrate="$video_bitrate"
-  local stream_path="$stream_path"
-  local video_width="$video_width"
-  local video_height="$video_height"
-  local output_fps="$output_fps"
-  local video_speed="$video_speed"
-  local watermark_input_args=("${watermark_input_args[@]}")
-  local video_effects=("${video_effects[@]}")
-
   ffmpeg_output_args=(
     -c:v libx264
     -preset ultrafast
@@ -385,20 +340,6 @@ start_projectm_pipeline() {
   local -a concat_input_args
   local -a projectm_video_input_args
   local -a projectm_pcm_input_args
-  local projectm_pcm_pipe="$projectm_pcm_pipe"
-  local projectm_video_pipe="$projectm_video_pipe"
-  local video_width="$video_width"
-  local video_height="$video_height"
-  local projectm_fps="$projectm_fps"
-  local projectm_presets="$projectm_presets"
-  local projectm_preset="$projectm_preset"
-  local projectm_bin="$projectm_bin"
-  local projectm_queue_size="$projectm_queue_size"
-  local video_size="$video_size"
-  local concat_list="$concat_list"
-  local watermark_input_args=("${watermark_input_args[@]}")
-  local ffmpeg_output_args=("${ffmpeg_output_args[@]}")
-  local ffmpeg_log="$ffmpeg_log"
 
   mkfifo "$projectm_pcm_pipe" "$projectm_video_pipe"
 
@@ -439,8 +380,6 @@ start_ffmpeg() {
   local audio_filter
   local ffmpeg_output_args
   local video_filter
-  local concat_list="$concat_list"
-  local ffmpeg_log="$ffmpeg_log"
 
   build_video_filter
   build_audio_filter
@@ -462,15 +401,10 @@ start_ffmpeg() {
 }
 
 stream_is_ready() {
-  local stream_path="$stream_path"
   [[ -s "$stream_path" ]]
 }
 
 wait_for_stream_startup() {
-  local startup_timeout="$startup_timeout"
-  local ffmpeg_pid="$ffmpeg_pid"
-  local stream_path="$stream_path"
-  local ffmpeg_log="$ffmpeg_log"
   local deadline=$((SECONDS + startup_timeout))
 
   while (( SECONDS < deadline )); do
@@ -497,18 +431,12 @@ wait_for_stream_startup() {
 }
 
 print_stream_url() {
-  local stream_url="$stream_url"
   printf 'rastercast: serving %s\n' "$stream_url" >&2
   printf 'rastercast: open this URL on the MiSTer with mplayer\n' >&2
   printf '%s\n' "$stream_url"
 }
 
 wait_for_ffmpeg() {
-  local ffmpeg_pid="$ffmpeg_pid"
-  local stream_done="$stream_done"
-  local stream_error="$stream_error"
-  local ffmpeg_log="$ffmpeg_log"
-
   if [[ -n "$ffmpeg_pid" ]]; then
     if ! wait "$ffmpeg_pid"; then
       ffmpeg_pid=""

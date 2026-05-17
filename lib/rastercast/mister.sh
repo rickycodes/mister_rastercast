@@ -1,20 +1,12 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2034,SC2029
+# shellcheck disable=SC2034,SC2154,SC2029
 
 run_mister_ssh() {
-  local ssh_opts=("${ssh_opts[@]}")
-  local mister_user="$mister_user"
-  local mister_host="$mister_host"
   mister_ssh_used=1
   ssh "${ssh_opts[@]}" "${mister_user}@${mister_host}" "$@"
 }
 
 run_mister_playback() {
-  local ssh_opts=("${ssh_opts[@]}")
-  local mister_user="$mister_user"
-  local mister_host="$mister_host"
-  local mister_tty="$mister_tty"
-
   case "$mister_tty" in
     1 | yes | true)
       mister_ssh_used=1
@@ -31,18 +23,12 @@ run_mister_playback() {
 }
 
 run_mister_scp() {
-  local ssh_opts=("${ssh_opts[@]}")
   mister_ssh_used=1
   scp "${ssh_opts[@]}" "$@"
 }
 
 copy_mister_script() {
-  local repo_dir="$repo_dir"
   local local_script="${repo_dir}/mister/rastercast.sh"
-  local mister_user="$mister_user"
-  local mister_host="$mister_host"
-  local mister_script="$mister_script"
-
   if [[ ! -f "$local_script" ]]; then
     printf 'error: local MiSTer script not found: %s\n' "$local_script" >&2
     exit 1
@@ -57,15 +43,6 @@ launch_mister() {
   local remote_env=()
   local var
   local value
-  local mister_auto="$mister_auto"
-  local mister_script="$mister_script"
-  local mister_deploy="$mister_deploy"
-  local mister_tty="$mister_tty"
-  local mister_detach="$mister_detach"
-  local mister_user="$mister_user"
-  local mister_host="$mister_host"
-  local stream_url="$stream_url"
-  local ssh_opts=("${ssh_opts[@]}")
 
   case "$mister_auto" in
     1 | yes | true)
