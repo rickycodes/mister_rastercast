@@ -161,6 +161,14 @@ build_projectm_pcm_input_args() {
   projectm_pcm_input_args=( -thread_queue_size "${cfg[projectm_queue_size]}" -f concat -safe 0 -protocol_whitelist "file,http,https,tcp,tls,crypto,httpproxy" -i "${cfg[concat_list]}" )
 }
 
+build_watermark_input_args() {
+  watermark_input_args=()
+
+  if [[ -n ${cfg[watermark_image]} ]]; then
+    watermark_input_args=( -i "${cfg[watermark_image]}" )
+  fi
+}
+
 build_watermark_overlay_chain() {
   local base_label=$1
   local overlay_input=$2
@@ -175,6 +183,7 @@ build_ffmpeg_output_args() {
   local audio_filter=$2
   local viz_filter
   local overlay_chain
+  local overlay_input
 
   ffmpeg_output_args=(
     -c:v libx264
@@ -201,14 +210,16 @@ build_ffmpeg_output_args() {
 
   if [[ ${cfg[visualizer]} == "projectm" ]]; then
     if [[ -n ${cfg[watermark_image]} ]]; then
-      overlay_chain=$(build_watermark_overlay_chain base '2:v')
+      overlay_input='2:v'
+      overlay_chain=$(build_watermark_overlay_chain base "$overlay_input")
       ffmpeg_output_args+=( -filter_complex "[0:v]${video_filter}[base];${overlay_chain}" -map "[v]" -map 1:a? )
     else
       ffmpeg_output_args+=( -map 0:v:0 -map 1:a? -vf "$video_filter" )
     fi
   elif [[ ${cfg[visualizer]} == "none" ]]; then
     if [[ -n ${cfg[watermark_image]} ]]; then
-      overlay_chain=$(build_watermark_overlay_chain base '1:v')
+      overlay_input='1:v'
+      overlay_chain=$(build_watermark_overlay_chain base "$overlay_input")
       ffmpeg_output_args+=( -filter_complex "[0:v]${video_filter}[base];${overlay_chain}" -map "[v]" -map 0:a? )
     else
       ffmpeg_output_args+=( -map 0:v:0 -map 0:a? -vf "$video_filter" )
@@ -216,7 +227,8 @@ build_ffmpeg_output_args() {
   else
     viz_filter="$(visualizer_filter),setsar=1,pad=${cfg[video_width]}:${cfg[video_height]}:(ow-iw)/2:(oh-ih)/2:black"
     if [[ -n ${cfg[watermark_image]} ]]; then
-      overlay_chain=$(build_watermark_overlay_chain base '1:v')
+      overlay_input='1:v'
+      overlay_chain=$(build_watermark_overlay_chain base "$overlay_input")
       ffmpeg_output_args+=( -filter_complex "[0:a]${viz_filter}[base];${overlay_chain}" -map "[v]" -map 0:a:0 )
     else
       ffmpeg_output_args+=( -filter_complex "[0:a]${viz_filter}[v]" -map "[v]" -map 0:a:0 )
@@ -231,12 +243,6 @@ build_ffmpeg_output_args() {
 }
 
 start_projectm_pipeline() {
-  local -a watermark_input_args=()
-
-  if [[ -n ${cfg[watermark_image]} ]]; then
-    watermark_input_args=( -i "${cfg[watermark_image]}" )
-  fi
-
   mkfifo "${cfg[projectm_pcm_pipe]}" "${cfg[projectm_video_pipe]}"
 
   RASTERCAST_PROJECTM_WIDTH="${cfg[video_width]}" \
@@ -268,6 +274,7 @@ start_projectm_pipeline() {
 start_ffmpeg() {
   build_ytdlp_args
   write_concat_list "$@"
+  build_watermark_input_args
 
   video_filter=$(build_video_filter)
   audio_filter=$(build_audio_filter)
@@ -283,6 +290,7 @@ start_ffmpeg() {
   else
     ffmpeg "${ffmpeg_common_args[@]}" \
       "${concat_input_args[@]}" \
+      "${watermark_input_args[@]}" \
       "${ffmpeg_output_args[@]}" >"${cfg[ffmpeg_log]}" 2>&1 &
     cfg+=( [ffmpeg_pid]="$!" )
   fi

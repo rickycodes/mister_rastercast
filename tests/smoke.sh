@@ -110,6 +110,10 @@ run_case() {
     playlist)
       env_args+=( RASTERCAST_YTDLP_PLAYLIST_ITEMS=1:2 )
       ;;
+    watermark)
+      env_args+=( RASTERCAST_WATERMARK_IMAGE="${case_dir}/watermark.png" )
+      : >"${case_dir}/watermark.png"
+      ;;
     projectm)
       env_args+=(
         RASTERCAST_VISUALIZER=projectm
@@ -233,6 +237,9 @@ EOF
     projectm)
       assert_contains "$log_file" "rastercast: queue has 1 item(s)"
       ;;
+    watermark)
+      assert_contains "$log_file" "watermark.png"
+      ;;
   esac
 }
 
@@ -247,6 +254,7 @@ main() {
 
   run_case youtube "https://www.youtube.com/watch?v=VIDEO_ID"
   run_case playlist "https://www.youtube.com/playlist?list=PLAYLIST_ID"
+  run_case watermark "$local_file"
   run_case projectm "$local_file"
 }
 
