@@ -3,14 +3,13 @@ set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd -- "${script_dir}/.." && pwd)
+declare -A cfg=()
 
 source "${repo_dir}/lib/rastercast/util.sh"
 source "${repo_dir}/lib/rastercast/config.sh"
 source "${repo_dir}/lib/rastercast/ffmpeg.sh"
 source "${repo_dir}/lib/rastercast/ytdlp.sh"
 source "${repo_dir}/lib/rastercast/mister.sh"
-
-valid_video_effects="none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp, avs-feedback, avs-grid, avs-crt, avs-neon"
 
 # Basic helpers
 
@@ -63,52 +62,44 @@ Environment:
 EOF
 }
 
-
-should_use_ytdlp() {
-  [[ "$ytdlp_mode" == "1" ]] || { [[ "$ytdlp_mode" == "auto" ]] && is_ytdlp_url "$1"; }
-}
-
 # Process lifecycle
 
 cleanup() {
   local status=$?
 
-  if [[ -n "${pcm_ffmpeg_pid}" ]] && kill -0 "${pcm_ffmpeg_pid}" 2>/dev/null; then
-    kill "${pcm_ffmpeg_pid}" 2>/dev/null || true
-    wait "${pcm_ffmpeg_pid}" 2>/dev/null || true
+  if [[ -n ${cfg[pcm_ffmpeg_pid]:-} ]] && kill -0 "${cfg[pcm_ffmpeg_pid]}" 2>/dev/null; then
+    kill "${cfg[pcm_ffmpeg_pid]}" 2>/dev/null || true
+    wait "${cfg[pcm_ffmpeg_pid]}" 2>/dev/null || true
   fi
 
-  if [[ -n "${projectm_pid}" ]] && kill -0 "${projectm_pid}" 2>/dev/null; then
-    kill "${projectm_pid}" 2>/dev/null || true
-    wait "${projectm_pid}" 2>/dev/null || true
+  if [[ -n ${cfg[projectm_pid]:-} ]] && kill -0 "${cfg[projectm_pid]}" 2>/dev/null; then
+    kill "${cfg[projectm_pid]}" 2>/dev/null || true
+    wait "${cfg[projectm_pid]}" 2>/dev/null || true
   fi
 
-  if [[ -n "${ffmpeg_pid}" ]] && kill -0 "${ffmpeg_pid}" 2>/dev/null; then
-    kill "${ffmpeg_pid}" 2>/dev/null || true
-    wait "${ffmpeg_pid}" 2>/dev/null || true
+  if [[ -n ${cfg[ffmpeg_pid]:-} ]] && kill -0 "${cfg[ffmpeg_pid]}" 2>/dev/null; then
+    kill "${cfg[ffmpeg_pid]}" 2>/dev/null || true
+    wait "${cfg[ffmpeg_pid]}" 2>/dev/null || true
   fi
 
-  if [[ -n "${server_pid}" ]] && kill -0 "${server_pid}" 2>/dev/null; then
-    kill "${server_pid}" 2>/dev/null || true
-    wait "${server_pid}" 2>/dev/null || true
+  if [[ -n ${cfg[server_pid]:-} ]] && kill -0 "${cfg[server_pid]}" 2>/dev/null; then
+    kill "${cfg[server_pid]}" 2>/dev/null || true
+    wait "${cfg[server_pid]}" 2>/dev/null || true
   fi
 
-  if [[ -n "${mister_ssh_used}" ]] && command -v ssh >/dev/null 2>&1; then
-    ssh "${ssh_opts[@]}" -O exit "${mister_user}@${mister_host}" >/dev/null 2>&1 || true
-  fi
-
-  rm -rf "${workdir}"
-  exit "${status}"
+  close_mister_connection
+  rm -rf -- "${cfg[workdir]:-}"
+  exit "$status"
 }
 
 start_server() {
-  python3 "${script_dir}/rastercast-server.py" "$bind_addr" "$port" "$workdir" >"${server_log}" 2>&1 &
-  server_pid=$!
+  python3 "${script_dir}/rastercast-server.py" "${cfg[bind_addr]}" "${cfg[port]}" "${cfg[workdir]}" >"${cfg[server_log]}" 2>&1 &
+  cfg+=( [server_pid]="$!" )
   sleep 0.1
 
-  if ! kill -0 "$server_pid" 2>/dev/null; then
-    printf 'error: HTTP server failed to start on %s:%s\n' "$bind_addr" "$port" >&2
-    show_server_log
+  if ! kill -0 "${cfg[server_pid]}" 2>/dev/null; then
+    printf 'error: HTTP server failed to start on %s:%s\n' "${cfg[bind_addr]}" "${cfg[port]}" >&2
+    show_server_log "${cfg[server_log]}"
     exit 1
   fi
 }
@@ -121,21 +112,23 @@ main() {
     exit 0
   fi
 
-  load_config "$@"
-  validate_config
+  cfg=()
+  cfg+=( [repo_dir]="$repo_dir" )
+  load_config
+  validate_config "$@"
   resolve_host_ip
   prepare_workdir
   trap cleanup EXIT INT TERM
 
-  printf 'rastercast: exporting MPEG-TS stream into %s\n' "$workdir" >&2
+  printf 'rastercast: exporting MPEG-TS stream into %s\n' "${cfg[workdir]}" >&2
   start_server
-  start_ffmpeg
+  start_ffmpeg "$@"
   wait_for_stream_startup
   print_stream_url
   launch_mister
   wait_for_ffmpeg
 
-  wait "$server_pid"
+  wait "${cfg[server_pid]}"
 }
 
 main "$@"

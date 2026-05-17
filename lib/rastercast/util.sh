@@ -41,7 +41,7 @@ validate_bool() {
 }
 
 show_ffmpeg_log() {
-  local ffmpeg_log="$ffmpeg_log"
+  local ffmpeg_log=$1
 
   if [[ -f "$ffmpeg_log" ]]; then
     printf '%s\n' '---- ffmpeg log ----' >&2
@@ -51,7 +51,7 @@ show_ffmpeg_log() {
 }
 
 show_server_log() {
-  local server_log="$server_log"
+  local server_log=$1
 
   if [[ -f "$server_log" ]]; then
     printf '%s\n' '---- server log ----' >&2
