@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
 
 build_ytdlp_args() {
+  local ytdlp_format="$ytdlp_format"
+  local ytdlp_cookies="$ytdlp_cookies"
+  local ytdlp_cookies_from_browser="$ytdlp_cookies_from_browser"
+  local ytdlp_js_runtime="$ytdlp_js_runtime"
+  local ytdlp_remote_components="$ytdlp_remote_components"
+
   ytdlp_args=(-f "$ytdlp_format")
   if [[ -n "$ytdlp_cookies" ]]; then
     ytdlp_args+=(--cookies "$ytdlp_cookies")
@@ -19,6 +24,8 @@ build_ytdlp_args() {
 
 is_ytdlp_playlist() {
   local item=$1
+  local ytdlp_args=("${ytdlp_args[@]}")
+  local ffmpeg_log="$ffmpeg_log"
   local extractor_key
 
   if ! should_use_ytdlp "$item"; then
@@ -31,6 +38,9 @@ is_ytdlp_playlist() {
 
 expand_playlist_input() {
   local item=$1
+  local ytdlp_args=("${ytdlp_args[@]}")
+  local ytdlp_playlist_items="$ytdlp_playlist_items"
+  local ffmpeg_log="$ffmpeg_log"
 
   if ! should_use_ytdlp "$item"; then
     printf '%s\n' "$item"
@@ -52,6 +62,8 @@ expand_playlist_input() {
 
 resolve_queue_item() {
   local item=$1
+  local ytdlp_args=("${ytdlp_args[@]}")
+  local ffmpeg_log="$ffmpeg_log"
   local urls
   local url_count
 
@@ -91,6 +103,10 @@ resolve_queue_item() {
 }
 
 write_concat_list() {
+  local inputs=("${inputs[@]}")
+  local workdir="$workdir"
+  local queue_skip_unavailable="$queue_skip_unavailable"
+  local stream_error="$stream_error"
   local expanded_items=()
   local item
   local resolved

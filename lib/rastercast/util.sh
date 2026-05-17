@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -42,17 +41,21 @@ validate_bool() {
 }
 
 show_ffmpeg_log() {
-  if [[ -f "${ffmpeg_log}" ]]; then
+  local ffmpeg_log="$ffmpeg_log"
+
+  if [[ -f "$ffmpeg_log" ]]; then
     printf '%s\n' '---- ffmpeg log ----' >&2
-    sed -n '1,200p' "${ffmpeg_log}" >&2
+    sed -n '1,200p' "$ffmpeg_log" >&2
     printf '%s\n' '--------------------' >&2
   fi
 }
 
 show_server_log() {
-  if [[ -f "${server_log}" ]]; then
+  local server_log="$server_log"
+
+  if [[ -f "$server_log" ]]; then
     printf '%s\n' '---- server log ----' >&2
-    sed -n '1,80p' "${server_log}" >&2
+    sed -n '1,80p' "$server_log" >&2
     printf '%s\n' '--------------------' >&2
   fi
 }
