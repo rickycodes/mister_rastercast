@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # shellcheck disable=SC2034
 set -euo pipefail
 
@@ -128,4 +128,8 @@ case "$mplayer_framedrop" in
 esac
 mplayer_args+=("$stream_url")
 
-nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
+if command -v nice >/dev/null 2>&1 && [[ $(id -u) -eq 0 ]]; then
+  exec nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
+fi
+
+exec env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
