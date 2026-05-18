@@ -78,7 +78,7 @@ for pair in "$@"; do
   export "$pair"
 done
 chmod +x "$script_path"
-if [[ ${RASTERCAST_MISTER_DETACH:-0} == 1 ]]; then
+if [ "${RASTERCAST_MISTER_DETACH:-0}" = 1 ]; then
   nohup "$script_path" "$stream_url" >/tmp/rastercast.log 2>&1 </dev/null &
 else
   exec "$script_path" "$stream_url"
