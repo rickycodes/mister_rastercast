@@ -226,8 +226,8 @@ MiSTer auto-launch:
 MiSTer playback:
 
 - `RASTERCAST_MPLAYER_VO` optionally sets the `mplayer` video output, for example `fbdev` or `fbdev2`.
-- `RASTERCAST_CACHE_KB` sets the `mplayer` cache size in KiB, default `8192`.
-- `RASTERCAST_CACHE_MIN` sets the percent cache fill before playback starts, default `10`.
+- `RASTERCAST_CACHE_KB` sets the `mplayer` cache size in KiB, default `16384`.
+- `RASTERCAST_CACHE_MIN` sets the percent cache fill before playback starts, default `20`.
 - `RASTERCAST_MPLAYER_AUTOSYNC` optionally sets `mplayer -autosync`, for example `30`.
 - `RASTERCAST_MPLAYER_FRAMEDROP` enables `mplayer -framedrop` when set to `1`, default `0`.
 
@@ -294,5 +294,5 @@ RASTERCAST_VIDEO_BITRATE=700k bin/rastercast.sh /path/to/video.mkv
 
 - Thanks to [mister_plex](https://github.com/mrchrisster/mister_plex) for the MiSTer playback and CRT setup guidance this project builds on.
 - YouTube input relies on `yt-dlp`; keep it updated and only stream content you are authorized to access this way.
-- MiSTer playback uses an 8192 KiB mplayer cache by default to avoid network starvation.
+- MiSTer playback uses a 16384 KiB mplayer cache by default to avoid network starvation.
 - The framebuffer centering issue from the current setup is still expected to need calibration work.

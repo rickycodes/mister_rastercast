@@ -14,8 +14,8 @@ Expected MiSTer environment:
 
 Environment:
   RASTERCAST_MPLAYER_VO  Optional mplayer video output, e.g. fbdev or fbdev2
-  RASTERCAST_CACHE_KB    MPlayer cache size in KiB (default: 8192)
-  RASTERCAST_CACHE_MIN   Percent cache fill before playback starts (default: 10)
+  RASTERCAST_CACHE_KB    MPlayer cache size in KiB (default: 16384)
+  RASTERCAST_CACHE_MIN   Percent cache fill before playback starts (default: 20)
   RASTERCAST_MPLAYER_AUTOSYNC  Optional mplayer -autosync value, e.g. 30
   RASTERCAST_MPLAYER_FRAMEDROP  Enable mplayer -framedrop: 1 or 0 (default: 0)
 EOF
@@ -103,8 +103,8 @@ restore_menu() {
 
 trap restore_menu EXIT INT TERM
 
-cache_kb=${RASTERCAST_CACHE_KB:-8192}
-cache_min=${RASTERCAST_CACHE_MIN:-10}
+cache_kb=${RASTERCAST_CACHE_KB:-16384}
+cache_min=${RASTERCAST_CACHE_MIN:-20}
 mplayer_autosync=${RASTERCAST_MPLAYER_AUTOSYNC:-}
 mplayer_framedrop=${RASTERCAST_MPLAYER_FRAMEDROP:-0}
 
