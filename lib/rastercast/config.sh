@@ -7,7 +7,7 @@ load_config() {
     [bind_addr]="${RASTERCAST_BIND_ADDR:-0.0.0.0}"
     [port]="${RASTERCAST_PORT:-8090}"
     [output_fps]="$output_fps"
-    [video_bitrate]="${RASTERCAST_VIDEO_BITRATE:-1000k}"
+    [video_bitrate]="${RASTERCAST_VIDEO_BITRATE:-700k}"
     [video_size]="${RASTERCAST_VIDEO_SIZE:-320x240}"
     [display_aspect]="${RASTERCAST_DISPLAY_ASPECT:-auto}"
     [video_fit]="${RASTERCAST_VIDEO_FIT:-auto}"

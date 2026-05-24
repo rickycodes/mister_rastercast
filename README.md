@@ -19,7 +19,7 @@ This keeps the control path simple and avoids Plex, XML URLs, and SAM/Attract Mo
 - `bin/rastercast.sh` runs on the PC
 - `mister/rastercast.sh` runs on the MiSTer
 
-The implementation uses a continuous MPEG-TS stream with H.264 video and MP2 audio. The default video bitrate is 1000 kbps, matching the `maxVideoBitrate=1000` setting used by `mister_plex`; source FPS is preserved unless overridden.
+The implementation uses a continuous MPEG-TS stream with H.264 video and MP2 audio. The default video bitrate is 700 kbps, which is a more conservative default for MiSTer playback; source FPS is preserved unless overridden.
 
 ## CRT target
 
@@ -179,7 +179,7 @@ PC streaming:
 
 Video output:
 
-- `RASTERCAST_VIDEO_BITRATE` sets the video bitrate, default `1000k`.
+- `RASTERCAST_VIDEO_BITRATE` sets the video bitrate, default `700k`.
 - `RASTERCAST_VIDEO_SIZE` sets the PC transcode size as `WIDTHxHEIGHT`, default `320x240`.
 - `RASTERCAST_DISPLAY_ASPECT` sets the intended display shape, for example `4:3`; default `auto`.
 - `RASTERCAST_FPS` optionally forces output FPS, for example `30000/1001`.
@@ -234,7 +234,7 @@ MiSTer playback:
 Optional tuning:
 
 ```bash
-RASTERCAST_VIDEO_BITRATE=1000k bin/rastercast.sh /path/to/video.mkv
+RASTERCAST_VIDEO_BITRATE=700k bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_VIDEO_SIZE=640x480 RASTERCAST_VIDEO_BITRATE=2500k bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_VIDEO_SIZE=512x240 RASTERCAST_DISPLAY_ASPECT=4:3 bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_FPS=30000/1001 bin/rastercast.sh /path/to/video.mkv
