@@ -70,20 +70,19 @@ run_remote_mister_script() {
   fi
 
   cfg+=( [mister_ssh_used]=1 )
-  "${ssh_cmd[@]}" "${cfg[mister_user]}@${cfg[mister_host]}" sh -s -- "${cfg[mister_script]}" "${cfg[stream_url]}" "$@" <<'SCRIPT'
+  if [[ "${RASTERCAST_MISTER_DETACH:-0}" = 1 ]]; then
+    "${ssh_cmd[@]}" "${cfg[mister_user]}@${cfg[mister_host]}" sh -s -- "${cfg[mister_script]}" "${cfg[stream_url]}" "$@" <<'SCRIPT'
 script_path=$1
 stream_url=$2
 shift 2
 for pair in "$@"; do
   export "$pair"
 done
-chmod +x "$script_path"
-if [ "${RASTERCAST_MISTER_DETACH:-0}" = 1 ]; then
-  nohup "$script_path" "$stream_url" >/tmp/rastercast.log 2>&1 </dev/null &
-else
-  exec "$script_path" "$stream_url"
-fi
+nohup "$script_path" "$stream_url" >/tmp/rastercast.log 2>&1 </dev/null &
 SCRIPT
+  else
+    "${ssh_cmd[@]}" "${cfg[mister_user]}@${cfg[mister_host]}" env "$@" "${cfg[mister_script]}" "${cfg[stream_url]}"
+  fi
 }
 
 launch_mister() {
@@ -135,7 +134,8 @@ launch_mister() {
     RASTERCAST_CACHE_MIN \
     RASTERCAST_MPLAYER_VO \
     RASTERCAST_MPLAYER_AUTOSYNC \
-    RASTERCAST_MPLAYER_FRAMEDROP; do
+    RASTERCAST_MPLAYER_FRAMEDROP \
+    RASTERCAST_MPLAYER_TSKEEPBROKEN; do
     value=${!var-}
     if [[ -n "$value" ]]; then
       remote_env+=( "${var}=${value}" )

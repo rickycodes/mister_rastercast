@@ -18,6 +18,8 @@ Environment:
   RASTERCAST_CACHE_MIN   Percent cache fill before playback starts (default: 20)
   RASTERCAST_MPLAYER_AUTOSYNC  Optional mplayer -autosync value, e.g. 30
   RASTERCAST_MPLAYER_FRAMEDROP  Enable mplayer -framedrop: 1 or 0 (default: 0)
+  RASTERCAST_MPLAYER_SUPPRESS_BAD_STREAM_STATE  Filter the "Bad stream state" line: 1 or 0 (default: 1)
+  RASTERCAST_MPLAYER_TSKEEPBROKEN  Enable mplayer -tskeepbroken: 1 or 0 (default: 0)
 EOF
 }
 
@@ -107,6 +109,8 @@ cache_kb=${RASTERCAST_CACHE_KB:-16384}
 cache_min=${RASTERCAST_CACHE_MIN:-20}
 mplayer_autosync=${RASTERCAST_MPLAYER_AUTOSYNC:-}
 mplayer_framedrop=${RASTERCAST_MPLAYER_FRAMEDROP:-0}
+mplayer_tskeepbroken=${RASTERCAST_MPLAYER_TSKEEPBROKEN:-0}
+mplayer_suppress_bad_stream_state=${RASTERCAST_MPLAYER_SUPPRESS_BAD_STREAM_STATE:-1}
 
 mplayer_args=(-fs -cache "$cache_kb" -cache-min "$cache_min")
 if [[ -n "${RASTERCAST_MPLAYER_VO:-}" ]]; then
@@ -126,10 +130,52 @@ case "$mplayer_framedrop" in
     exit 1
     ;;
 esac
+case "$mplayer_tskeepbroken" in
+  1 | yes | true)
+    mplayer_args=(-tskeepbroken "${mplayer_args[@]}")
+    ;;
+  0 | no | false)
+    ;;
+  *)
+    printf 'error: RASTERCAST_MPLAYER_TSKEEPBROKEN must be 1 or 0\n' >&2
+    exit 1
+    ;;
+esac
 mplayer_args+=("$stream_url")
 
-if command -v nice >/dev/null 2>&1 && [[ $(id -u) -eq 0 ]]; then
-  exec nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
-fi
+launch_mplayer() {
+  local stderr_fifo=
+  local stderr_filter_pid=
 
-exec env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
+  if [[ "$mplayer_suppress_bad_stream_state" == 1 ]]; then
+    stderr_fifo=$(mktemp -u /tmp/rastercast-mplayer-stderr.XXXXXX)
+    mkfifo "$stderr_fifo"
+    sed '/^Bad stream state, please report as bug!$/d' <"$stderr_fifo" >&2 &
+    stderr_filter_pid=$!
+  fi
+
+  cleanup_stderr_filter() {
+    if [[ -n "$stderr_filter_pid" ]]; then
+      kill "$stderr_filter_pid" 2>/dev/null || true
+      wait "$stderr_filter_pid" 2>/dev/null || true
+    fi
+    if [[ -n "$stderr_fifo" ]]; then
+      rm -f -- "$stderr_fifo"
+    fi
+  }
+  trap cleanup_stderr_filter EXIT INT TERM
+
+  if command -v nice >/dev/null 2>&1 && [[ $(id -u) -eq 0 ]]; then
+    if [[ "$mplayer_suppress_bad_stream_state" == 1 ]]; then
+      exec nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}" 2>"$stderr_fifo"
+    fi
+    exec nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
+  fi
+
+  if [[ "$mplayer_suppress_bad_stream_state" == 1 ]]; then
+    exec env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}" 2>"$stderr_fifo"
+  fi
+  exec env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
+}
+
+launch_mplayer
