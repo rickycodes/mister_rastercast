@@ -58,8 +58,10 @@ expand_playlist_input() {
 
 resolve_queue_item() {
   local item=$1
-  local urls
-  local url_count
+  local index=${2:-0}
+  local output_template
+  local normalized_output
+  local resolved
 
   if ! should_use_ytdlp "$item"; then
     if ! is_http_url "$item"; then
@@ -69,31 +71,38 @@ resolve_queue_item() {
     return
   fi
 
-  printf 'rastercast: resolving URL input with yt-dlp: %s\n' "$item" >&2
-  if ! yt-dlp "${ytdlp_args[@]}" --simulate "$item" >>"${cfg[ffmpeg_log]}" 2>&1; then
-    printf 'warning: yt-dlp failed while resolving queue item: %s\n' "$item" >&2
+  output_template="${cfg[workdir]}/queue-$(printf '%03d' "$index").mkv"
+  normalized_output="${cfg[workdir]}/queue-$(printf '%03d' "$index").clean.mkv"
+  printf 'rastercast: caching URL input with yt-dlp: %s\n' "$item" >&2
+  if ! resolved=$(yt-dlp "${ytdlp_args[@]}" --no-playlist --no-part --no-mtime --remux-video mkv --output "$output_template" --print after_move:filepath "$item" 2>>"${cfg[ffmpeg_log]}"); then
+    printf 'warning: yt-dlp failed while caching queue item: %s\n' "$item" >&2
     return 1
   fi
 
-  if ! urls=$(yt-dlp "${ytdlp_args[@]}" --get-url "$item" 2>>"${cfg[ffmpeg_log]}"); then
-    printf 'warning: yt-dlp failed while getting media URL: %s\n' "$item" >&2
+  resolved=$(printf '%s\n' "$resolved" | sed -n '$p')
+  if [[ -z "$resolved" || ! -f "$resolved" ]]; then
+    printf 'warning: yt-dlp did not produce a cached file for queue item: %s\n' "$item" >&2
     return 1
   fi
 
-  url_count=$(printf '%s\n' "$urls" | sed '/^$/d' | wc -l)
-  if [[ "$url_count" != "1" ]]; then
-    printf 'warning: yt-dlp returned %s media URLs for queue item: %s\n' "$url_count" "$item" >&2
-    printf 'error: use a muxed progressive format, e.g. RASTERCAST_YTDLP_FORMAT='\''best[height<=480][protocol^=http][vcodec!=none][acodec!=none]/best[protocol^=http][vcodec!=none][acodec!=none]'\''\n' >&2
+  printf 'rastercast: normalizing cached media file: %s\n' "$resolved" >&2
+  if ! ffmpeg -hide_banner -loglevel error -y \
+    -fflags +genpts+discardcorrupt \
+    -err_detect ignore_err \
+    -i "$resolved" \
+    -map 0:v:0 -map 0:a:0? -map 0:s? \
+    -c:v copy \
+    -c:a aac -b:a 128k -ar 44100 -ac 2 \
+    -c:s copy \
+    "$normalized_output" 2>>"${cfg[ffmpeg_log]}"; then
+    printf 'warning: ffmpeg failed while normalizing cached queue item: %s\n' "$item" >&2
+    rm -f -- "$normalized_output"
     return 1
   fi
 
-  if [[ "$urls" == *".m3u8"* || "$urls" == *"/manifest/hls_playlist/"* ]]; then
-    printf 'warning: yt-dlp returned an HLS URL for queue item: %s\n' "$item" >&2
-    printf 'error: queued YouTube playback needs a progressive muxed URL; try RASTERCAST_YTDLP_FORMAT='\''best[height<=480][protocol^=http][vcodec!=none][acodec!=none]/best[protocol^=http][vcodec!=none][acodec!=none]'\''\n' >&2
-    return 1
-  fi
+  mv -f -- "$normalized_output" "$resolved"
 
-  printf '%s\n' "$urls"
+  printf '%s\n' "$resolved"
 }
 
 write_concat_list() {
@@ -123,7 +132,7 @@ write_concat_list() {
   for item in "${expanded_items[@]}"; do
     index=$((index + 1))
     printf 'rastercast: preparing queue item %s/%s\n' "$index" "${#expanded_items[@]}" >&2
-    if ! resolved=$(resolve_queue_item "$item"); then
+    if ! resolved=$(resolve_queue_item "$item" "$index"); then
       if is_enabled "${cfg[queue_skip_unavailable]}"; then
         printf 'rastercast: skipping unavailable queue item %s/%s\n' "$index" "${#expanded_items[@]}" >&2
         continue

@@ -88,7 +88,11 @@ cleanup() {
   fi
 
   close_mister_connection
-  rm -rf -- "${cfg[workdir]:-}"
+  if [[ ${RASTERCAST_KEEP_WORKDIR:-0} == 1 || $status -ne 0 ]]; then
+    printf 'rastercast: keeping workdir at %s\n' "${cfg[workdir]:-}" >&2
+  else
+    rm -rf -- "${cfg[workdir]:-}"
+  fi
   exit "$status"
 }
 

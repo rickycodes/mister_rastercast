@@ -57,6 +57,7 @@ build_video_filter() {
   local effect_filter
   local -a video_effects=()
   local input_uses_ytdlp=${cfg[input_uses_ytdlp]:-0}
+  local resolved_fit=$fit
 
   if [[ "$fit" == "auto" ]]; then
     if [[ "$input_uses_ytdlp" == "1" ]]; then
@@ -65,6 +66,8 @@ build_video_filter() {
       fit=contain
     fi
   fi
+  resolved_fit=$fit
+  printf 'rastercast: video fit mode resolved to %s (input_uses_ytdlp=%s)\n' "$resolved_fit" "$input_uses_ytdlp" >&2
 
   case "$fit" in
     contain)
@@ -145,7 +148,9 @@ build_ffmpeg_common_args() {
     -nostdin
     -re
     -fflags
-    +genpts
+    +genpts+discardcorrupt
+    -err_detect
+    ignore_err
   )
 }
 
