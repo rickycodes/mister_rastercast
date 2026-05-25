@@ -136,20 +136,21 @@ set -euo pipefail
 log_file=${RASTERCAST_SMOKE_LOG:?}
 printf 'ffmpeg %s\n' "$*" >>"$log_file"
 output=${@: -1}
-case "$output" in
+  case "$output" in
   *.ts)
     printf 'stream\n' >"$output"
     trap 'exit 0' TERM INT
     while :; do sleep 1; done
     ;;
   *)
+    : >"$output"
     exit 0
     ;;
 esac
 EOF
   chmod +x "${stub_dir}/ffmpeg"
 
-  cat >"${stub_dir}/yt-dlp" <<'EOF'
+cat >"${stub_dir}/yt-dlp" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 log_file=${RASTERCAST_SMOKE_LOG:?}
@@ -167,10 +168,20 @@ case " $* " in
     printf 'https://example.com/video-1\n'
     printf 'https://example.com/video-2\n'
     ;;
-  *" --get-url "*)
-    printf 'https://media.example/video.mp4\n'
-    ;;
-  *" --simulate "*)
+  *" --no-playlist --no-part --no-mtime --remux-video mkv --output "*)
+    output=
+    prev=
+    for arg in "$@"; do
+      if [[ "$prev" == "--output" ]]; then
+        output=$arg
+        break
+      fi
+      prev=$arg
+    done
+    if [[ -n "$output" ]]; then
+      : >"$output"
+      printf '%s\n' "$output"
+    fi
     ;;
   *)
     printf 'https://media.example/video.mp4\n'
@@ -229,9 +240,8 @@ EOF
       assert_not_contains "$log_file" "yt-dlp "
       ;;
     youtube)
-      assert_contains "$log_file" "rastercast: resolving URL input with yt-dlp:"
-      assert_contains "$log_file" "--simulate"
-      assert_contains "$log_file" "--get-url"
+      assert_contains "$log_file" "rastercast: caching URL input with yt-dlp:"
+      assert_contains "$log_file" "rastercast: normalizing cached media file:"
       ;;
     playlist)
       assert_contains "$log_file" "rastercast: expanding playlist with yt-dlp:"
