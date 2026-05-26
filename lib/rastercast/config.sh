@@ -71,6 +71,7 @@ prepare_workdir() {
     [projectm_pid]=""
     [ffmpeg_log]="${workdir}/ffmpeg.log"
     [server_log]="${workdir}/server.log"
+    [mister_log]="${workdir}/mister.log"
     [stream_path]="${workdir}/stream.ts"
     [stream_done]="${workdir}/stream.done"
     [stream_error]="${workdir}/stream.error"
@@ -80,6 +81,10 @@ prepare_workdir() {
     [ssh_control_path]="${workdir}/ssh-control-%r@%h:%p"
     [mister_ssh_used]=""
   )
+
+  if [[ ${RASTERCAST_DEBUG_WORKDIR:-0} == 1 ]]; then
+    printf 'rastercast: workdir %s\n' "$workdir" >&2
+  fi
 }
 
 validate_watermark_config() {

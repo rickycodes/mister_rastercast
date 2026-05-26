@@ -70,8 +70,12 @@ run_remote_mister_script() {
   fi
 
   cfg+=( [mister_ssh_used]=1 )
+  if [[ -z ${cfg[mister_log]:-} ]]; then
+    cfg+=( [mister_log]="${cfg[workdir]}/mister.log" )
+  fi
   if [[ "${RASTERCAST_MISTER_DETACH:-0}" = 1 ]]; then
-    "${ssh_cmd[@]}" "${cfg[mister_user]}@${cfg[mister_host]}" sh -s -- "${cfg[mister_script]}" "${cfg[stream_url]}" "$@" <<'SCRIPT'
+    "${ssh_cmd[@]}" "${cfg[mister_user]}@${cfg[mister_host]}" sh -s -- "${cfg[mister_script]}" "${cfg[stream_url]}" "$@" \
+      2> >(tee -a "${cfg[mister_log]}" >&2) <<'SCRIPT'
 script_path=$1
 stream_url=$2
 shift 2
@@ -81,7 +85,8 @@ done
 nohup "$script_path" "$stream_url" >/tmp/rastercast.log 2>&1 </dev/null &
 SCRIPT
   else
-    "${ssh_cmd[@]}" "${cfg[mister_user]}@${cfg[mister_host]}" env "$@" "${cfg[mister_script]}" "${cfg[stream_url]}"
+    "${ssh_cmd[@]}" "${cfg[mister_user]}@${cfg[mister_host]}" env "$@" "${cfg[mister_script]}" "${cfg[stream_url]}" \
+      2> >(tee -a "${cfg[mister_log]}" >&2)
   fi
 }
 
