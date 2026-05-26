@@ -50,6 +50,7 @@ expand_playlist_input() {
   fi
 
   printf 'rastercast: expanding playlist with yt-dlp: %s\n' "$item" >&2
+  cfg+=( [input_uses_ytdlp_playlist]=1 )
   if [[ -n ${cfg[ytdlp_playlist_items]} ]]; then
     playlist_args+=( --playlist-items "${cfg[ytdlp_playlist_items]}" )
   fi

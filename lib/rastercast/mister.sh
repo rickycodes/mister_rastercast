@@ -129,6 +129,16 @@ launch_mister() {
 
   printf 'rastercast: launching MiSTer playback on %s@%s\n' "${cfg[mister_user]}" "${cfg[mister_host]}" >&2
   remote_env+=( "RASTERCAST_MISTER_DETACH=${cfg[mister_detach]}" )
+
+  if [[ ${cfg[input_uses_ytdlp_playlist]:-0} == 1 || ${cfg[input_ytdlp_count]:-0} -gt 1 ]]; then
+    if [[ -z ${RASTERCAST_MPLAYER_AUTOSYNC:-} ]]; then
+      remote_env+=( "RASTERCAST_MPLAYER_AUTOSYNC=30" )
+    fi
+    if [[ -z ${RASTERCAST_MPLAYER_FRAMEDROP:-} ]]; then
+      remote_env+=( "RASTERCAST_MPLAYER_FRAMEDROP=1" )
+    fi
+  fi
+
   for var in \
     RASTERCAST_CACHE_KB \
     RASTERCAST_CACHE_MIN \

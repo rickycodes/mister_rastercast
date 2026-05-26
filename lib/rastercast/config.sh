@@ -130,6 +130,7 @@ validate_watermark_config() {
 validate_config() {
   local inputs=("$@")
   local item
+  local ytdlp_input_count=0
 
   require_command ffmpeg
   require_command python3
@@ -227,6 +228,7 @@ validate_config() {
 
   for item in "${inputs[@]}"; do
     if should_use_ytdlp "$item"; then
+      ytdlp_input_count=$((ytdlp_input_count + 1))
       cfg+=( [input_uses_ytdlp]=1 )
       require_command yt-dlp
       if [[ -n ${cfg[ytdlp_cookies]} && ! -f ${cfg[ytdlp_cookies]} ]]; then
@@ -238,4 +240,6 @@ validate_config() {
       exit 1
     fi
   done
+
+  cfg+=( [input_ytdlp_count]="$ytdlp_input_count" )
 }

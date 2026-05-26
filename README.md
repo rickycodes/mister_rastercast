@@ -231,6 +231,8 @@ MiSTer playback:
 - `RASTERCAST_MPLAYER_AUTOSYNC` optionally sets `mplayer -autosync`, for example `30`.
 - `RASTERCAST_MPLAYER_FRAMEDROP` enables `mplayer -framedrop` when set to `1`, default `0`.
 
+For YouTube playlist-style queues, rastercast defaults to `RASTERCAST_MPLAYER_AUTOSYNC=30` and `RASTERCAST_MPLAYER_FRAMEDROP=1` unless you set either variable yourself.
+
 Optional tuning:
 
 ```bash
