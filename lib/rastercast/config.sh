@@ -29,7 +29,7 @@ load_config() {
     [projectm_queue_size]="${RASTERCAST_PROJECTM_QUEUE_SIZE:-1024}"
     [audio_effect]="${RASTERCAST_AUDIO_EFFECT:-none}"
     [ytdlp_mode]="${RASTERCAST_YTDLP:-auto}"
-    [ytdlp_format]="${RASTERCAST_YTDLP_FORMAT:-best[height<=480][protocol^=http][vcodec!=none][acodec!=none]/best[protocol^=http][vcodec!=none][acodec!=none]/best[height<=480][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]}"
+    [ytdlp_format]="${RASTERCAST_YTDLP_FORMAT:-best[height<=480][protocol^=http][vcodec!=none][acodec!=none]/best[protocol^=http][vcodec!=none][acodec!=none]}"
     [ytdlp_cookies]="${RASTERCAST_YTDLP_COOKIES:-}"
     [ytdlp_cookies_from_browser]="${RASTERCAST_YTDLP_COOKIES_FROM_BROWSER:-}"
     [ytdlp_js_runtime]="${RASTERCAST_YTDLP_JS_RUNTIME:-}"

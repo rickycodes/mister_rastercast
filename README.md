@@ -282,7 +282,7 @@ RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1 bin/rastercast.sh "https://www.youtube.com/p
 
 Age-restricted YouTube videos require authenticated cookies. Use `RASTERCAST_YTDLP_COOKIES_FROM_BROWSER` with a browser profile that is signed in to YouTube, or export cookies and pass the file with `RASTERCAST_YTDLP_COOKIES`.
 If YouTube signature solving fails, set `RASTERCAST_YTDLP_JS_RUNTIME=node`; newer `yt-dlp` builds may also need `RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github`.
-Queued YouTube playback resolves media URLs before starting ffmpeg and expects one progressive muxed media URL per video. HLS manifests and separate video/audio URLs are rejected because they are unreliable inside ffmpeg's concat demuxer. If needed, force a muxed progressive format with `RASTERCAST_YTDLP_FORMAT='best[height<=480][protocol^=http][vcodec!=none][acodec!=none]/best[protocol^=http][vcodec!=none][acodec!=none]'`. Use `RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1` to skip private or deleted queue entries.
+Queued YouTube playback resolves media URLs before starting ffmpeg and expects one progressive muxed media URL per video. HLS manifests and separate video/audio URLs are rejected because they are unreliable inside ffmpeg's concat demuxer. If needed, override the default format with `RASTERCAST_YTDLP_FORMAT`. Use `RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1` to skip private or deleted queue entries.
 
 If MiSTer reports `Cache empty`, increase the player cache or reduce bitrate:
 
