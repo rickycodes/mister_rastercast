@@ -57,6 +57,15 @@ The default MiSTer SSH login is usually `root` with password `1`; SSH will promp
 
 ## Usage
 
+The repository includes ready-made scripts in [`examples/`](/home/ricky/projects/rastercast/examples).
+
+- [`examples/local-file.sh`](/home/ricky/projects/rastercast/examples/local-file.sh): a single local file with higher-bitrate CRT-friendly defaults.
+- [`examples/local-queue.sh`](/home/ricky/projects/rastercast/examples/local-queue.sh): a batch of local files with skip-on-missing enabled.
+- [`examples/serve-only.sh`](/home/ricky/projects/rastercast/examples/serve-only.sh): start the stream without auto-launching MiSTer.
+- [`examples/youtube-single.sh`](/home/ricky/projects/rastercast/examples/youtube-single.sh): one YouTube URL with the playlist-safe playback knobs.
+- [`examples/youtube-playlist.sh`](/home/ricky/projects/rastercast/examples/youtube-playlist.sh): the shuffled playlist launcher used by `launch.sh`.
+- [`examples/projectm-youtube.sh`](/home/ricky/projects/rastercast/examples/projectm-youtube.sh): YouTube playback rendered through projectM.
+
 ### Local Video
 
 Serve a local video from the PC and launch playback on MiSTer:
