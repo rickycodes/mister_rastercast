@@ -155,7 +155,11 @@ build_ffmpeg_common_args() {
 }
 
 build_concat_input_args() {
-  concat_input_args=( -f concat -safe 0 -protocol_whitelist "file,http,https,tcp,tls,crypto,httpproxy" -i "${cfg[concat_list]}" )
+  concat_input_args=( )
+  if is_enabled "${cfg[loop]}"; then
+    concat_input_args+=( -stream_loop -1 )
+  fi
+  concat_input_args+=( -f concat -safe 0 -protocol_whitelist "file,http,https,tcp,tls,crypto,httpproxy" -i "${cfg[concat_list]}" )
 }
 
 build_projectm_video_input_args() {
@@ -163,7 +167,11 @@ build_projectm_video_input_args() {
 }
 
 build_projectm_pcm_input_args() {
-  projectm_pcm_input_args=( -thread_queue_size "${cfg[projectm_queue_size]}" -f concat -safe 0 -protocol_whitelist "file,http,https,tcp,tls,crypto,httpproxy" -i "${cfg[concat_list]}" )
+  projectm_pcm_input_args=( -thread_queue_size "${cfg[projectm_queue_size]}" )
+  if is_enabled "${cfg[loop]}"; then
+    projectm_pcm_input_args+=( -stream_loop -1 )
+  fi
+  projectm_pcm_input_args+=( -f concat -safe 0 -protocol_whitelist "file,http,https,tcp,tls,crypto,httpproxy" -i "${cfg[concat_list]}" )
 }
 
 build_watermark_input_args() {

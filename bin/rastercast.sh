@@ -51,6 +51,8 @@ Environment:
   RASTERCAST_YTDLP_REMOTE_COMPONENTS  Remote yt-dlp components, e.g. ejs:github
   RASTERCAST_YTDLP_PLAYLIST_ITEMS  yt-dlp playlist items/range, e.g. 1:10
   RASTERCAST_QUEUE_SKIP_UNAVAILABLE  Skip unavailable queue items: 1 or 0 (default: 0)
+  RASTERCAST_LOOP  Loop the queued input continuously: 1 or 0 (default: 0)
+  RASTERCAST_STREAM_LOOP  Alias for RASTERCAST_LOOP
   RASTERCAST_STARTUP_TIMEOUT  Seconds to wait for stream startup (default: 30)
   RASTERCAST_MISTER_AUTO  Automatically launch playback on MiSTer: 1 or 0 (default: 1)
   RASTERCAST_MISTER_HOST  MiSTer host/IP (default: mister)

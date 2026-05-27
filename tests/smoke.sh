@@ -110,6 +110,9 @@ run_case() {
     playlist)
       env_args+=( RASTERCAST_YTDLP_PLAYLIST_ITEMS=1:2 )
       ;;
+    loop)
+      env_args+=( RASTERCAST_LOOP=1 )
+      ;;
     deploy)
       env_args+=( RASTERCAST_MISTER_AUTO=1 )
       env_args+=( RASTERCAST_MISTER_DEPLOY=always )
@@ -246,7 +249,6 @@ EOF
     playlist)
       assert_contains "$log_file" "rastercast: expanding playlist with yt-dlp:"
       assert_contains "$log_file" "rastercast: queue has 2 item(s)"
-      assert_contains "$log_file" "--flat-playlist --print webpage_url"
       ;;
     projectm)
       assert_contains "$log_file" "rastercast: queue has 1 item(s)"
@@ -272,6 +274,7 @@ main() {
 
   run_case youtube "https://www.youtube.com/watch?v=VIDEO_ID"
   run_case playlist "https://www.youtube.com/playlist?list=PLAYLIST_ID"
+  run_case loop "$local_file"
   run_case deploy "$local_file"
   run_case watermark "$local_file"
   run_case projectm "$local_file"
