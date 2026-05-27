@@ -47,6 +47,7 @@ load_config() {
     [mister_tty]="${RASTERCAST_MISTER_TTY:-1}"
     [mister_detach]="${RASTERCAST_MISTER_DETACH:-0}"
     [host_ip]="${RASTERCAST_HOST_IP:-}"
+    [loop_logger_pid]=""
   )
 }
 

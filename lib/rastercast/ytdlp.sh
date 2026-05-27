@@ -109,6 +109,7 @@ resolve_queue_item() {
 write_concat_list() {
   local inputs=("$@")
   expanded_items=()
+  resolved_items=()
   local item
   local expanded
   local resolved
@@ -143,6 +144,7 @@ write_concat_list() {
       show_ffmpeg_log "${cfg[ffmpeg_log]}"
       exit 1
     fi
+    resolved_items+=("$resolved")
     concat_escape "$resolved" >> "${cfg[concat_list]}"
     resolved_count=$((resolved_count + 1))
   done

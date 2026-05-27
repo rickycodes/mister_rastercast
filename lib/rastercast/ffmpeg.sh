@@ -154,6 +154,55 @@ build_ffmpeg_common_args() {
   )
 }
 
+probe_media_duration() {
+  local file=$1
+
+  if ! command -v ffprobe >/dev/null 2>&1; then
+    return 1
+  fi
+
+  ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | sed -n '1p'
+}
+
+start_loop_cycle_logger() {
+  local duration=${cfg[queue_duration_seconds]:-}
+  local cycle=1
+
+  if [[ -z $duration ]]; then
+    return
+  fi
+
+  printf 'rastercast: loop enabled; estimated playlist duration %.3fs\n' "$duration" >&2
+  (
+    while :; do
+      sleep "$duration"
+      cycle=$((cycle + 1))
+      printf 'rastercast: loop cycle %s (estimated)\n' "$cycle" >&2
+    done
+  ) &
+  cfg+=( [loop_logger_pid]="$!" )
+}
+
+estimate_queue_duration() {
+  local total=0
+  local duration
+  local file
+
+  if [[ ${cfg[loop]} != 1 ]]; then
+    return
+  fi
+
+  for file in "${resolved_items[@]}"; do
+    duration=$(probe_media_duration "$file") || return 1
+    if ! awk -v duration="$duration" 'BEGIN { exit !(duration + 0 == duration && duration > 0) }'; then
+      return 1
+    fi
+    total=$(awk -v total="$total" -v duration="$duration" 'BEGIN { printf "%.3f", total + duration }')
+  done
+
+  cfg+=( [queue_duration_seconds]="$total" )
+}
+
 build_concat_input_args() {
   concat_input_args=( )
   if is_enabled "${cfg[loop]}"; then
@@ -293,6 +342,7 @@ start_projectm_pipeline() {
 start_ffmpeg() {
   build_ytdlp_args
   write_concat_list "$@"
+  estimate_queue_duration || true
   build_watermark_input_args
 
   video_filter=$(build_video_filter)
@@ -303,6 +353,8 @@ start_ffmpeg() {
   build_projectm_video_input_args
   build_projectm_pcm_input_args
   build_ffmpeg_output_args "$video_filter" "$audio_filter"
+
+  start_loop_cycle_logger
 
   if [[ ${cfg[visualizer]} == "projectm" ]]; then
     start_projectm_pipeline

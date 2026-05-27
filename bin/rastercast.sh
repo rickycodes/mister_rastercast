@@ -90,6 +90,11 @@ cleanup() {
     wait "${cfg[server_pid]}" 2>/dev/null || true
   fi
 
+  if [[ -n ${cfg[loop_logger_pid]:-} ]] && kill -0 "${cfg[loop_logger_pid]}" 2>/dev/null; then
+    kill "${cfg[loop_logger_pid]}" 2>/dev/null || true
+    wait "${cfg[loop_logger_pid]}" 2>/dev/null || true
+  fi
+
   close_mister_connection
   if [[ ${RASTERCAST_KEEP_WORKDIR:-0} == 1 || $status -ne 0 ]]; then
     printf 'rastercast: keeping workdir at %s\n' "${cfg[workdir]:-}" >&2
