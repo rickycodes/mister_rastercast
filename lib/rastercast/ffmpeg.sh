@@ -159,6 +159,9 @@ build_concat_input_args() {
   if is_enabled "${cfg[loop]}"; then
     concat_input_args+=( -stream_loop -1 )
   fi
+  if [[ -n ${cfg[offset]} ]]; then
+    concat_input_args+=( -ss "${cfg[offset]}" )
+  fi
   concat_input_args+=( -f concat -safe 0 -protocol_whitelist "file,http,https,tcp,tls,crypto,httpproxy" -i "${cfg[concat_list]}" )
 }
 
@@ -170,6 +173,9 @@ build_projectm_pcm_input_args() {
   projectm_pcm_input_args=( -thread_queue_size "${cfg[projectm_queue_size]}" )
   if is_enabled "${cfg[loop]}"; then
     projectm_pcm_input_args+=( -stream_loop -1 )
+  fi
+  if [[ -n ${cfg[offset]} ]]; then
+    projectm_pcm_input_args+=( -ss "${cfg[offset]}" )
   fi
   projectm_pcm_input_args+=( -f concat -safe 0 -protocol_whitelist "file,http,https,tcp,tls,crypto,httpproxy" -i "${cfg[concat_list]}" )
 }

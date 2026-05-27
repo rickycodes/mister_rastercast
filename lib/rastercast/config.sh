@@ -37,6 +37,7 @@ load_config() {
     [ytdlp_playlist_items]="${RASTERCAST_YTDLP_PLAYLIST_ITEMS:-}"
     [queue_skip_unavailable]="${RASTERCAST_QUEUE_SKIP_UNAVAILABLE:-0}"
     [loop]="${RASTERCAST_LOOP:-${RASTERCAST_STREAM_LOOP:-0}}"
+    [offset]="${RASTERCAST_OFFSET:-}"
     [startup_timeout]="${RASTERCAST_STARTUP_TIMEOUT:-30}"
     [mister_auto]="${RASTERCAST_MISTER_AUTO:-1}"
     [mister_host]="${RASTERCAST_MISTER_HOST:-mister}"
@@ -153,6 +154,11 @@ validate_config() {
   validate_bool RASTERCAST_QUEUE_SKIP_UNAVAILABLE "${cfg[queue_skip_unavailable]}"
   validate_bool RASTERCAST_LOOP "${cfg[loop]}"
   validate_bool RASTERCAST_MISTER_DETACH "${cfg[mister_detach]}"
+
+  if [[ -n ${cfg[offset]} && ${cfg[offset]} =~ [[:space:]] ]]; then
+    printf 'error: RASTERCAST_OFFSET must not contain whitespace\n' >&2
+    exit 1
+  fi
 
   case ${cfg[video_fit]} in
     auto | contain | cover)

@@ -223,6 +223,7 @@ YouTube and other `yt-dlp` inputs:
 - `RASTERCAST_YTDLP_PLAYLIST_ITEMS` limits YouTube playlist expansion, for example `1:10`.
 - `RASTERCAST_QUEUE_SKIP_UNAVAILABLE` skips private/deleted queue items when set to `1`, default `0`.
 - `RASTERCAST_LOOP` loops the queued input continuously when set to `1`, default `0`. `RASTERCAST_STREAM_LOOP` is accepted as an alias.
+- `RASTERCAST_OFFSET` seeks into the queued input before playback starts, for example `90` or `00:01:30`.
 
 MiSTer auto-launch:
 
@@ -286,6 +287,8 @@ RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1 bin/rastercast.sh "https://www.youtube.com/p
 RASTERCAST_LOOP=1 bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_LOOP=1 bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_LOOP=1 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
+RASTERCAST_OFFSET=90 bin/rastercast.sh /path/to/video.mkv
+RASTERCAST_OFFSET=00:01:30 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYLIST_ID"
 ```
 
 `RASTERCAST_VIDEO_FIT=auto` is the default. It uses letterboxing for local files and direct media URLs, but center-crops `yt-dlp` inputs to fill the 320x240 CRT frame.
@@ -297,6 +300,7 @@ RASTERCAST_LOOP=1 bin/rastercast.sh "https://www.youtube.com/playlist?list=PLAYL
 Age-restricted YouTube videos require authenticated cookies. Use `RASTERCAST_YTDLP_COOKIES_FROM_BROWSER` with a browser profile that is signed in to YouTube, or export cookies and pass the file with `RASTERCAST_YTDLP_COOKIES`.
 If YouTube signature solving fails, set `RASTERCAST_YTDLP_JS_RUNTIME=node`; newer `yt-dlp` builds may also need `RASTERCAST_YTDLP_REMOTE_COMPONENTS=ejs:github`.
 Queued YouTube playback resolves media URLs before starting ffmpeg and expects one progressive muxed media URL per video. HLS manifests and separate video/audio URLs are rejected because they are unreliable inside ffmpeg's concat demuxer. If needed, override the default format with `RASTERCAST_YTDLP_FORMAT`. Use `RASTERCAST_QUEUE_SKIP_UNAVAILABLE=1` to skip private or deleted queue entries.
+`RASTERCAST_OFFSET` applies to the queued concat input, so it works across single files, single URLs, and playlists.
 
 If MiSTer reports `Cache empty`, increase the player cache or reduce bitrate:
 

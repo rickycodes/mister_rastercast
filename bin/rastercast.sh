@@ -53,6 +53,7 @@ Environment:
   RASTERCAST_QUEUE_SKIP_UNAVAILABLE  Skip unavailable queue items: 1 or 0 (default: 0)
   RASTERCAST_LOOP  Loop the queued input continuously: 1 or 0 (default: 0)
   RASTERCAST_STREAM_LOOP  Alias for RASTERCAST_LOOP
+  RASTERCAST_OFFSET  Start offset for the queued input, for example 90 or 00:01:30
   RASTERCAST_STARTUP_TIMEOUT  Seconds to wait for stream startup (default: 30)
   RASTERCAST_MISTER_AUTO  Automatically launch playback on MiSTer: 1 or 0 (default: 1)
   RASTERCAST_MISTER_HOST  MiSTer host/IP (default: mister)

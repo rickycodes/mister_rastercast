@@ -113,6 +113,9 @@ run_case() {
     loop)
       env_args+=( RASTERCAST_LOOP=1 )
       ;;
+    offset)
+      env_args+=( RASTERCAST_OFFSET=10 )
+      ;;
     deploy)
       env_args+=( RASTERCAST_MISTER_AUTO=1 )
       env_args+=( RASTERCAST_MISTER_DEPLOY=always )
@@ -250,6 +253,9 @@ EOF
       assert_contains "$log_file" "rastercast: expanding playlist with yt-dlp:"
       assert_contains "$log_file" "rastercast: queue has 2 item(s)"
       ;;
+    offset)
+      assert_contains "$log_file" "rastercast: queue has 1 item(s)"
+      ;;
     projectm)
       assert_contains "$log_file" "rastercast: queue has 1 item(s)"
       ;;
@@ -266,15 +272,34 @@ EOF
 main() {
   local local_case_dir
   local local_file
+  local offset_args_file
 
   local_case_dir=$(setup_case local-file)
   local_file="${local_case_dir}/video.mkv"
   : >"$local_file"
+
+  offset_args_file=$(mktemp "${TMPDIR:-/tmp}/rastercast-smoke.offset-args.XXXXXX")
+  env RASTERCAST_OFFSET=00:01:30 bash -lc "
+    cd -- '$repo_dir'
+    declare -A cfg=()
+    source lib/rastercast/util.sh
+    source lib/rastercast/config.sh
+    source lib/rastercast/ffmpeg.sh
+    load_config
+    cfg+=( [concat_list]=/tmp/list [workdir]=/tmp )
+    build_concat_input_args
+    printf '%s\n' \"\${concat_input_args[@]}\"
+  " >"$offset_args_file"
+  assert_contains "$offset_args_file" "-ss"
+  assert_contains "$offset_args_file" "00:01:30"
+  rm -f -- "$offset_args_file"
+
   run_case local "$local_file"
 
   run_case youtube "https://www.youtube.com/watch?v=VIDEO_ID"
   run_case playlist "https://www.youtube.com/playlist?list=PLAYLIST_ID"
   run_case loop "$local_file"
+  run_case offset "$local_file"
   run_case deploy "$local_file"
   run_case watermark "$local_file"
   run_case projectm "$local_file"
