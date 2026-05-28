@@ -109,7 +109,6 @@ resolve_queue_item() {
 write_concat_list() {
   local inputs=("$@")
   expanded_items=()
-  resolved_items=()
   local item
   local expanded
   local resolved

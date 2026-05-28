@@ -173,11 +173,13 @@ start_loop_cycle_logger() {
   fi
 
   printf 'rastercast: loop enabled; estimated playlist duration %.3fs\n' "$duration" >&2
+  printf '%s\n' "$cycle" > "${cfg[loop_cycle_file]}"
   (
     while :; do
       sleep "$duration"
       cycle=$((cycle + 1))
       printf 'rastercast: loop cycle %s (estimated)\n' "$cycle" >&2
+      printf '%s\n' "$cycle" > "${cfg[loop_cycle_file]}"
     done
   ) &
   cfg+=( [loop_logger_pid]="$!" )

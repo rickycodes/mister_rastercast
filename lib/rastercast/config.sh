@@ -48,6 +48,7 @@ load_config() {
     [mister_detach]="${RASTERCAST_MISTER_DETACH:-0}"
     [host_ip]="${RASTERCAST_HOST_IP:-}"
     [loop_logger_pid]=""
+    [loop_cycle_file]=""
   )
 }
 
@@ -78,6 +79,7 @@ prepare_workdir() {
     [stream_path]="${workdir}/stream.ts"
     [stream_done]="${workdir}/stream.done"
     [stream_error]="${workdir}/stream.error"
+    [loop_cycle_file]="${workdir}/loop.cycle"
     [projectm_pcm_pipe]="${workdir}/projectm.pcm"
     [projectm_video_pipe]="${workdir}/projectm.rgb"
     [stream_url]="http://${cfg[host_ip]}:${cfg[port]}/stream.ts"
