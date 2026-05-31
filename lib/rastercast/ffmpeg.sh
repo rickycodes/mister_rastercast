@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+declare -ag resolved_items=()
+
 valid_video_effects="none, acid, trails, edges, ghost, matrix, rgbshift, negative, warp, wobble, feedback, scanwarp, avs-feedback, avs-grid, avs-crt, avs-neon"
 
 video_effect_filter() {
