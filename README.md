@@ -28,8 +28,6 @@ The intended MiSTer framebuffer mode is:
 ```ini
 video_mode=320,240,60
 vga_scaler=1
-fb_terminal=1
-composite_sync=1
 ```
 
 ## Requirements
