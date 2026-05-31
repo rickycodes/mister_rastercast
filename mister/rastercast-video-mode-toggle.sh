@@ -5,9 +5,13 @@ config_file=${RASTERCAST_CONFIG_FILE:-/media/fat/MiSTer.ini}
 
 ideal_video_mode='320,240,60'
 ideal_vga_scaler='1'
+ideal_fb_terminal='1'
+ideal_composite_sync='1'
 
 default_video_mode=${RASTERCAST_DEFAULT_VIDEO_MODE:-0}
 default_vga_scaler=${RASTERCAST_DEFAULT_VGA_SCALER:-0}
+default_fb_terminal=${RASTERCAST_DEFAULT_FB_TERMINAL:-0}
+default_composite_sync=${RASTERCAST_DEFAULT_COMPOSITE_SYNC:-0}
 
 usage_error() {
   printf 'error: %s\n' "$1" >&2
@@ -46,11 +50,15 @@ replace_or_append() {
 set_stream_profile() {
   replace_or_append video_mode "$ideal_video_mode"
   replace_or_append vga_scaler "$ideal_vga_scaler"
+  replace_or_append fb_terminal "$ideal_fb_terminal"
+  replace_or_append composite_sync "$ideal_composite_sync"
 }
 
 set_default_profile() {
   replace_or_append video_mode "$default_video_mode"
   replace_or_append vga_scaler "$default_vga_scaler"
+  replace_or_append fb_terminal "$default_fb_terminal"
+  replace_or_append composite_sync "$default_composite_sync"
 }
 
 is_stream_profile() {
@@ -72,10 +80,19 @@ reload_menu() {
 
 print_profile_state() {
   local label=$1
-  printf '%s: video_mode=%s vga_scaler=%s\n' \
+  local video_mode vga_scaler fb_terminal composite_sync
+
+  video_mode=$(read_setting video_mode)
+  vga_scaler=$(read_setting vga_scaler)
+  fb_terminal=$(read_setting fb_terminal)
+  composite_sync=$(read_setting composite_sync)
+
+  printf '%s: video_mode=%s vga_scaler=%s fb_terminal=%s composite_sync=%s\n' \
     "$label" \
-    "$(read_setting video_mode)" \
-    "$(read_setting vga_scaler)" >&2
+    "$video_mode" \
+    "$vga_scaler" \
+    "$fb_terminal" \
+    "$composite_sync" >&2
 }
 
 main() {
