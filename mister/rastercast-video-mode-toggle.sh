@@ -86,9 +86,6 @@ main() {
   if is_stream_profile; then
     set_default_profile
     printf 'set default profile\n' >&2
-  elif is_default_profile; then
-    set_stream_profile
-    printf 'set streaming profile\n' >&2
   else
     set_stream_profile
     printf 'set streaming profile\n' >&2
