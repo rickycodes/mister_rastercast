@@ -61,7 +61,7 @@ The repository includes ready-made scripts in [`examples/`](/home/ricky/projects
 - [`examples/local-queue.sh`](/home/ricky/projects/rastercast/examples/local-queue.sh): a batch of local files with skip-on-missing enabled.
 - [`examples/serve-only.sh`](/home/ricky/projects/rastercast/examples/serve-only.sh): start the stream without auto-launching MiSTer.
 - [`examples/youtube-single.sh`](/home/ricky/projects/rastercast/examples/youtube-single.sh): one YouTube URL with the playlist-safe playback knobs.
-- [`examples/youtube-playlist.sh`](/home/ricky/projects/rastercast/examples/youtube-playlist.sh): the shuffled playlist launcher used by `launch.sh`.
+- [`examples/youtube-playlist.sh`](/home/ricky/projects/rastercast/examples/youtube-playlist.sh): the shuffled playlist launcher.
 - [`examples/debug-youtube-playlist.sh`](/home/ricky/projects/rastercast/examples/debug-youtube-playlist.sh): playlist launcher that prints the temp workdir for log inspection.
 - [`examples/projectm-youtube.sh`](/home/ricky/projects/rastercast/examples/projectm-youtube.sh): YouTube playback rendered through projectM.
 
