@@ -31,7 +31,7 @@ vga_scaler=1
 fb_terminal=1
 ```
 
-The MiSTer toggle helper in [`mister/rastercast-video-mode-toggle.sh`](/home/ricky/projects/rastercast/mister/rastercast-video-mode-toggle.sh) restores a baseline profile with `video_mode=0`, `vga_scaler=0`, `fb_terminal=0`, and `composite_sync=0` by default. Override those restore values with `RASTERCAST_DEFAULT_VIDEO_MODE`, `RASTERCAST_DEFAULT_VGA_SCALER`, `RASTERCAST_DEFAULT_FB_TERMINAL`, and `RASTERCAST_DEFAULT_COMPOSITE_SYNC` if your normal setup differs.
+The MiSTer toggle helper in [`mister/rastercast-video-mode-toggle.sh`](/home/ricky/projects/rastercast/mister/rastercast-video-mode-toggle.sh) restores a baseline profile with `video_mode=0`, `vga_scaler=0`, and `fb_terminal=0` by default. Override those restore values with `RASTERCAST_DEFAULT_VIDEO_MODE`, `RASTERCAST_DEFAULT_VGA_SCALER`, and `RASTERCAST_DEFAULT_FB_TERMINAL` if your normal setup differs.
 
 ## Requirements
 
