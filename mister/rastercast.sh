@@ -20,7 +20,7 @@ Environment:
   RASTERCAST_MPLAYER_FRAMEDROP  Enable mplayer -framedrop: 1 or 0 (default: 0)
   RASTERCAST_MPLAYER_SUPPRESS_BAD_STREAM_STATE  Filter the "Bad stream state" line: 1 or 0 (default: 1)
   RASTERCAST_MPLAYER_TSKEEPBROKEN  Enable mplayer -tskeepbroken: 1 or 0 (default: 0)
-  RASTERCAST_POST_PLAYBACK  What to show after playback ends: menu or tui (default: menu)
+  RASTERCAST_POST_PLAYBACK  What to show after playback ends: menu, tui, or none (default: menu)
 EOF
 }
 
@@ -222,6 +222,8 @@ case "$post_playback" in
     ;;
   tui)
     restore_tui
+    ;;
+  none)
     ;;
   *)
     printf 'warning: unknown RASTERCAST_POST_PLAYBACK=%s; restoring menu\n' "$post_playback" >&2
