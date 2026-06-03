@@ -56,6 +56,36 @@ ssh root@mister 'chmod +x /media/fat/Scripts/rastercast.sh'
 
 The default MiSTer SSH login is usually `root` with password `1`; SSH will prompt if you have not configured keys.
 
+## Always-On Laptop Service
+
+For unattended playback on a laptop, run rastercast under `systemd` so it survives logout and blocks sleep while active.
+
+The repo includes a user-service unit at [`systemd/rastercast.service`](/home/ricky/projects/rastercast/systemd/rastercast.service) and a wrapper at [`scripts/rastercast-service.sh`](/home/ricky/projects/rastercast/scripts/rastercast-service.sh).
+
+Install it as a user service:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp systemd/rastercast.service ~/.config/systemd/user/rastercast.service
+systemctl --user daemon-reload
+loginctl enable-linger "$USER"
+systemctl --user enable --now rastercast.service
+```
+
+Watch the logs with:
+
+```bash
+journalctl --user -u rastercast -f
+```
+
+Stop it with:
+
+```bash
+systemctl --user stop rastercast.service
+```
+
+If your clone is not at `~/projects/rastercast`, edit `RASTERCAST_REPO_DIR` or the service file path before enabling it.
+
 ## Usage
 
 The repository includes ready-made scripts in [`examples/`](/home/ricky/projects/rastercast/examples).

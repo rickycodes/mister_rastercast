@@ -20,6 +20,7 @@ Environment:
   RASTERCAST_MPLAYER_FRAMEDROP  Enable mplayer -framedrop: 1 or 0 (default: 0)
   RASTERCAST_MPLAYER_SUPPRESS_BAD_STREAM_STATE  Filter the "Bad stream state" line: 1 or 0 (default: 1)
   RASTERCAST_MPLAYER_TSKEEPBROKEN  Enable mplayer -tskeepbroken: 1 or 0 (default: 0)
+  RASTERCAST_POST_PLAYBACK  What to show after playback ends: menu or tui (default: menu)
 EOF
 }
 
@@ -99,8 +100,27 @@ restore_menu() {
     printf '\033[2J\033[H' > /dev/tty1 2>/dev/null || true
   fi
   if [[ -w /dev/MiSTer_cmd ]]; then
+    printf 'restoring menu core\n' >&2
     printf '%s\n' 'load_core /media/fat/menu.rbf' > /dev/MiSTer_cmd
   fi
+}
+
+restore_tui() {
+  local tui_path=${RASTERCAST_TUI_SCRIPT:-/media/fat/Scripts/rastercast-tui}
+
+  if [[ -x "$tui_path" ]]; then
+    if [[ -w /dev/tty1 ]]; then
+      printf '\033[2J\033[H' > /dev/tty1 2>/dev/null || true
+    fi
+    if [[ -w /dev/MiSTer_cmd ]]; then
+      printf 'launching rastercast-tui\n' >&2
+    fi
+    nohup "$tui_path" >/tmp/rastercast-tui.log 2>&1 </dev/null &
+    return 0
+  fi
+
+  printf 'warning: rastercast-tui not found at %s; falling back to menu\n' "$tui_path" >&2
+  restore_menu
 }
 
 trap restore_menu EXIT INT TERM
@@ -167,15 +187,45 @@ launch_mplayer() {
 
   if command -v nice >/dev/null 2>&1 && [[ $(id -u) -eq 0 ]]; then
     if [[ "$mplayer_suppress_bad_stream_state" == 1 ]]; then
-      exec nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}" 2>"$stderr_fifo"
+      set +e
+      nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}" 2>"$stderr_fifo"
+      local status=$?
+      set -e
+      return "$status"
     fi
-    exec nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
+    set +e
+    nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
+    local status=$?
+    set -e
+    return "$status"
   fi
 
   if [[ "$mplayer_suppress_bad_stream_state" == 1 ]]; then
-    exec env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}" 2>"$stderr_fifo"
+    set +e
+    env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}" 2>"$stderr_fifo"
+    local status=$?
+    set -e
+    return "$status"
   fi
-  exec env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
+  set +e
+  env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
+  local status=$?
+  set -e
+  return "$status"
 }
 
-launch_mplayer
+launch_mplayer || mplayer_status=$?
+post_playback=${RASTERCAST_POST_PLAYBACK:-menu}
+case "$post_playback" in
+  menu)
+    restore_menu
+    ;;
+  tui)
+    restore_tui
+    ;;
+  *)
+    printf 'warning: unknown RASTERCAST_POST_PLAYBACK=%s; restoring menu\n' "$post_playback" >&2
+    restore_menu
+    ;;
+esac
+exit "${mplayer_status:-0}"
