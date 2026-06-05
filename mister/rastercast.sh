@@ -185,32 +185,33 @@ launch_mplayer() {
   }
   trap cleanup_stderr_filter EXIT INT TERM
 
+  local status=0
+
   if command -v nice >/dev/null 2>&1 && [[ $(id -u) -eq 0 ]]; then
     if [[ "$mplayer_suppress_bad_stream_state" == 1 ]]; then
       set +e
       nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}" 2>"$stderr_fifo"
-      local status=$?
+      status=$?
       set -e
-      return "$status"
+    else
+      set +e
+      nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
+      status=$?
+      set -e
     fi
-    set +e
-    nice -n -20 env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
-    local status=$?
-    set -e
-    return "$status"
-  fi
-
-  if [[ "$mplayer_suppress_bad_stream_state" == 1 ]]; then
+  elif [[ "$mplayer_suppress_bad_stream_state" == 1 ]]; then
     set +e
     env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}" 2>"$stderr_fifo"
-    local status=$?
+    status=$?
     set -e
-    return "$status"
+  else
+    set +e
+    env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
+    status=$?
+    set -e
   fi
-  set +e
-  env LD_LIBRARY_PATH="${mrsampath}" "${mrsampath}/mplayer" "${mplayer_args[@]}"
-  local status=$?
-  set -e
+
+  cleanup_stderr_filter
   return "$status"
 }
 
