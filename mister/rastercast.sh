@@ -16,6 +16,7 @@ Environment:
   RASTERCAST_MPLAYER_VO  Optional mplayer video output, e.g. fbdev or fbdev2
   RASTERCAST_CACHE_KB    MPlayer cache size in KiB (default: 16384)
   RASTERCAST_CACHE_MIN   Percent cache fill before playback starts (default: 20)
+  RASTERCAST_MISTER_DISPLAY_WAIT  Seconds to wait after switching cores (default: 5)
   RASTERCAST_MPLAYER_AUTOSYNC  Optional mplayer -autosync value, e.g. 30
   RASTERCAST_MPLAYER_FRAMEDROP  Enable mplayer -framedrop: 1 or 0 (default: 0)
   RASTERCAST_MPLAYER_SUPPRESS_BAD_STREAM_STATE  Filter the "Bad stream state" line: 1 or 0 (default: 1)
@@ -86,7 +87,7 @@ if [[ -w /dev/MiSTer_cmd ]]; then
   printf '%s\n' 'load_core /media/fat/menu.rbf' > /dev/MiSTer_cmd
 fi
 
-display_wait=${samvideo_displaywait:-5}
+display_wait=${RASTERCAST_MISTER_DISPLAY_WAIT:-${samvideo_displaywait:-5}}
 sleep "$display_wait"
 
 if declare -F mbc >/dev/null 2>&1; then
