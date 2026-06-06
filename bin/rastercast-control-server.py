@@ -110,6 +110,8 @@ class RastercastControlHandler(http.server.BaseHTTPRequestHandler):
             log_path = os.path.join("/tmp", "rastercast-control.log")
             log_file = open(log_path, "a", buffering=1, encoding="utf-8")
             child_env = os.environ.copy()
+            child_env.setdefault("RASTERCAST_MISTER_DISPLAY_WAIT", "1")
+            child_env.setdefault("RASTERCAST_CACHE_MIN", "5")
             if self.dj_mode:
                 child_env["RASTERCAST_MISTER_DETACH"] = "1"
                 child_env["RASTERCAST_POST_PLAYBACK"] = "none"
