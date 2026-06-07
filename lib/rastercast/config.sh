@@ -22,7 +22,7 @@ load_config() {
     [watermark_opacity]="${RASTERCAST_WATERMARK_OPACITY:-0.65}"
     [video_speed]="${RASTERCAST_VIDEO_SPEED:-1}"
     [visualizer]="${RASTERCAST_VISUALIZER:-none}"
-    [projectm_bin]="${RASTERCAST_PROJECTM:-${HOME}/projects/rastercast-projectm/rastercast-projectm}"
+    [projectm_bin]="${RASTERCAST_PROJECTM:-${HOME:-/root}/projects/rastercast-projectm/rastercast-projectm}"
     [projectm_presets]="${RASTERCAST_PROJECTM_PRESETS:-/usr/share/projectM/presets}"
     [projectm_preset]="${RASTERCAST_PROJECTM_PRESET:-}"
     [projectm_fps]="${RASTERCAST_PROJECTM_FPS:-${output_fps:-30}}"
