@@ -304,6 +304,151 @@ clone_repo_into_ct() {
     "rm -rf '$install_dir' && git clone '$repo_url' '$install_dir'"
 }
 
+install_launch_wrappers_into_ct() {
+  local ctid=$1
+  local install_dir=$2
+
+  printf 'provision: installing launch wrappers in CT %s\n' "$ctid" >&2
+  pct exec "$ctid" -- bash -s -- "$install_dir" <<'EOF'
+set -euo pipefail
+
+install_dir=$1
+mkdir -p "$install_dir/scripts"
+
+cat > "$install_dir/scripts/rastercast-service.sh" <<'WRAPPER'
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir=${RASTERCAST_REPO_DIR:-${HOME}/projects/rastercast}
+launch_mode=${RASTERCAST_LAUNCH_MODE:-detached-loop}
+
+if [[ ! -d $repo_dir ]]; then
+  printf 'error: rastercast repo not found: %s\n' "$repo_dir" >&2
+  exit 1
+fi
+
+cd "$repo_dir"
+
+exec systemd-inhibit \
+  --what=sleep:idle:handle-lid-switch \
+  --mode=block \
+  --who=rastercast \
+  --why='Keep rastercast running' \
+  env \
+  RASTERCAST_LAUNCH_MODE="$launch_mode" \
+  ./launch.sh
+WRAPPER
+
+cat > "$install_dir/launch.sh" <<'WRAPPER'
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+
+launch_mode=${RASTERCAST_LAUNCH_MODE:-debug}
+run_forever=0
+stop_requested=0
+
+request_stop() {
+  stop_requested=1
+}
+
+trap request_stop INT TERM
+
+case "$launch_mode" in
+  debug)
+    export RASTERCAST_KEEP_WORKDIR=1
+    export RASTERCAST_MISTER_DETACH=0
+    export RASTERCAST_MISTER_TTY=0
+    export RASTERCAST_DEBUG_WORKDIR=1
+    ;;
+  debug-loop)
+    export RASTERCAST_KEEP_WORKDIR=1
+    export RASTERCAST_MISTER_DETACH=0
+    export RASTERCAST_MISTER_TTY=0
+    export RASTERCAST_LOOP=1
+    export RASTERCAST_DEBUG_WORKDIR=1
+    ;;
+  debug-forever)
+    export RASTERCAST_KEEP_WORKDIR=1
+    export RASTERCAST_MISTER_DETACH=0
+    export RASTERCAST_MISTER_TTY=0
+    export RASTERCAST_LOOP=1
+    export RASTERCAST_DEBUG_WORKDIR=1
+    run_forever=1
+    ;;
+  detached)
+    export RASTERCAST_KEEP_WORKDIR=1
+    export RASTERCAST_MISTER_DETACH=1
+    export RASTERCAST_MISTER_TTY=1
+    ;;
+  detached-loop)
+    export RASTERCAST_KEEP_WORKDIR=1
+    export RASTERCAST_MISTER_DETACH=1
+    export RASTERCAST_MISTER_TTY=1
+    export RASTERCAST_LOOP=1
+    ;;
+  detached-forever)
+    export RASTERCAST_KEEP_WORKDIR=1
+    export RASTERCAST_MISTER_DETACH=1
+    export RASTERCAST_MISTER_TTY=1
+    export RASTERCAST_LOOP=1
+    run_forever=1
+    ;;
+  *)
+    printf 'error: RASTERCAST_LAUNCH_MODE must be debug, debug-loop, debug-forever, detached, detached-loop, or detached-forever\n' >&2
+    exit 1
+    ;;
+esac
+
+run_once() {
+  if [[ $launch_mode == debug* ]]; then
+    "$script_dir/examples/debug-youtube-playlist.sh"
+  else
+    "$script_dir/examples/youtube-playlist.sh"
+  fi
+}
+
+if (( run_forever )); then
+  run_number=1
+  while :; do
+    if (( stop_requested )); then
+      break
+    fi
+    printf 'launch: starting playlist launcher run %s\n' "$run_number" >&2
+    if run_once; then
+      status=0
+    else
+      status=$?
+    fi
+    printf 'launch: playlist launcher run %s exited with %s\n' "$run_number" "$status" >&2
+    run_number=$((run_number + 1))
+    if (( stop_requested )); then
+      break
+    fi
+    printf 'launch: restarting playlist launcher in 1s\n' >&2
+    sleep 1 || break
+  done
+  exit 130
+fi
+
+if run_once; then
+  status=0
+else
+  status=$?
+fi
+
+if (( stop_requested )); then
+  exit 130
+fi
+
+exit "$status"
+WRAPPER
+
+chmod +x "$install_dir/scripts/rastercast-service.sh" "$install_dir/launch.sh"
+EOF
+}
+
 install_packages_into_ct() {
   local ctid=$1
 
@@ -485,7 +630,7 @@ main() {
     clone_repo_into_ct "$ctid" "$repo_url" "$install_dir"
   fi
 
-  pct exec "$ctid" -- bash -lc "chmod +x '$install_dir/scripts/rastercast-service.sh' '$install_dir/launch.sh'"
+  install_launch_wrappers_into_ct "$ctid" "$install_dir"
 
   if is_enabled "$enable_playback_service"; then
     install_playback_service_into_ct "$ctid" "$install_dir" "$launch_mode"
