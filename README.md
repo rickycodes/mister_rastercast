@@ -86,6 +86,55 @@ systemctl --user stop rastercast.service
 
 If your clone is not at `~/projects/rastercast`, edit `RASTERCAST_REPO_DIR` or the service file path before enabling it.
 
+## Proxmox CT
+
+If you want rastercast running in a Proxmox LXC container, use the host-side
+bootstrap script:
+
+```bash
+scripts/proxmox-ct-install.sh <ctid> [source-dir]
+```
+
+You can also run it directly from GitHub on the Proxmox host:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/rickycodes/mister_rastercast/main/scripts/proxmox-ct-install.sh)" -- <ctid>
+```
+
+It creates a fresh CT, installs the runtime packages inside the container,
+copies or clones the repo into the CT, and enables a systemd service that
+runs rastercast in `detached-loop` mode by default.
+
+If you do not set `RASTERCAST_CT_TEMPLATE`, it prompts you to pick from the
+available templates in `/var/lib/vz/template/cache` when run on a tty, showing
+the image name, version, and architecture instead of the raw archive path.
+If you do not set `RASTERCAST_CT_STORAGE`, it prompts you to pick from the
+available Proxmox storages when run on a tty.
+If you do not set `RASTERCAST_CTID`, Proxmox will assign the next available
+VMID automatically.
+If the script cannot prompt and there is more than one template or storage
+available, it now stops and asks you to set the matching env var explicitly.
+
+By default the CT bootstrap enables the control server on port `8092`. The
+always-on playback loop is optional and can be enabled separately.
+
+Useful overrides:
+
+- `RASTERCAST_REPO_URL` sets the Git URL used when no local source directory is provided.
+- `RASTERCAST_INSTALL_DIR` sets the install path inside the CT, default `/opt/rastercast`.
+- `RASTERCAST_LAUNCH_MODE` sets the service launch mode, default `detached-loop`.
+- `RASTERCAST_ENABLE_SERVICE` or `RASTERCAST_ENABLE_PLAYBACK_SERVICE` enables the playback loop service when set to `1`.
+- `RASTERCAST_ENABLE_CONTROL_SERVICE` enables the control server when set to `1`.
+- `RASTERCAST_CT_TEMPLATE` points to the Proxmox template archive used for CT creation; if unset, the script prompts from the available templates in `/var/lib/vz/template/cache` when run on a tty, using human-readable image labels.
+- `RASTERCAST_CT_STORAGE` points to the Proxmox storage used for the new CT rootfs; if unset, the script prompts from the available storages when run on a tty.
+- `RASTERCAST_CTID` optionally pins the numeric VMID for the new CT.
+- `RASTERCAST_CT_STORAGE`, `RASTERCAST_CT_DISK_SIZE`, `RASTERCAST_CT_BRIDGE`, `RASTERCAST_CT_MEMORY`, and `RASTERCAST_CT_CORES` control the CT create defaults. `RASTERCAST_CT_DISK_SIZE` defaults to `8` GiB.
+- `RASTERCAST_CT_PASSWORD` and `RASTERCAST_CT_SSH_PUBLIC_KEY_FILE` optionally set the root login for a freshly created CT.
+- `RASTERCAST_CONTROL_BIND_ADDR`, `RASTERCAST_CONTROL_PORT`, and `RASTERCAST_CONTROL_DJ_MODE` control the control server service.
+
+MiSTer deployment is still separate. You still need the MiSTer launcher at
+`/media/fat/Scripts/rastercast.sh` for playback to start on the console.
+
 ## Usage
 
 The repository includes ready-made scripts in [`examples/`](/home/ricky/projects/rastercast/examples).
@@ -271,6 +320,7 @@ MiSTer playback:
 - `RASTERCAST_MPLAYER_VO` optionally sets the `mplayer` video output, for example `fbdev` or `fbdev2`.
 - `RASTERCAST_CACHE_KB` sets the `mplayer` cache size in KiB, default `16384`.
 - `RASTERCAST_CACHE_MIN` sets the percent cache fill before playback starts, default `20`.
+- `RASTERCAST_MISTER_DISPLAY_WAIT` sets the delay after core switch before `mplayer` starts, default `5`.
 - `RASTERCAST_MPLAYER_AUTOSYNC` optionally sets `mplayer -autosync`, for example `30`.
 - `RASTERCAST_MPLAYER_FRAMEDROP` enables `mplayer -framedrop` when set to `1`, default `0`.
 
@@ -283,6 +333,7 @@ RASTERCAST_VIDEO_BITRATE=700k bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_VIDEO_SIZE=640x480 RASTERCAST_VIDEO_BITRATE=2500k bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_VIDEO_SIZE=512x240 RASTERCAST_DISPLAY_ASPECT=4:3 bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_FPS=30000/1001 bin/rastercast.sh /path/to/video.mkv
+RASTERCAST_MISTER_DISPLAY_WAIT=1 RASTERCAST_CACHE_MIN=5 bin/rastercast.sh /path/to/video.mkv
 RASTERCAST_VIDEO_FIT=cover bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_FIT=contain bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
 RASTERCAST_VIDEO_EFFECT=acid bin/rastercast.sh "https://www.youtube.com/watch?v=VIDEO_ID"
